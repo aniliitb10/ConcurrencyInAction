@@ -1,13 +1,13 @@
 #pragma once
 
-#include "util.h"
+#include "date_util.h"
 
 #include <thread>
 #include <fmt/format.h>
 #include <type_traits>
 
 /*
- * A thread wrapper class which will join in its destructor
+ * A _thread wrapper class which will join in its destructor
  * */
 class j_thread
 {
@@ -36,15 +36,15 @@ public:
     if (_thread.joinable())
     {
       // bad! never do this! but doing here just to get better sense of code flow
-      // this just helped me understand that the this destructor got called from main thread!
+      // this just helped me understand that the this destructor got called from main _thread!
       // - which makes sense now!
-      fmt::print("thread id: {} Attempting to join thread at: {}\n",
-              std::this_thread::get_id(), dt::datetime::local_datetime());
+      fmt::print("_thread id: {} Attempting to join _thread at: {}\n",
+              std::this_thread::get_id(), dt::datetime::datetime_IST());
       _thread.join();
     }
   }
 
-  // providing a handle of the thread
+  // providing a handle of the _thread
   std::thread& get_thread()
   {
     return _thread;
