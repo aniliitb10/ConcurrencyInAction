@@ -56,6 +56,7 @@ TEST_F(TestDefaultThread, ConstructibleTest)
 {
     static_assert(!std::is_trivially_constructible_v<DefaultThread>);
     static_assert(!std::is_copy_constructible_v<DefaultThread>);
+    static_assert(!std::is_default_constructible_v<DefaultThread>);
 
     static_assert(std::is_move_constructible_v<DefaultThread>);
     static_assert(!std::is_constructible_v<DefaultThread>);

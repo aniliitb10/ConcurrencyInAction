@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <thread_pool.h>
 
 //#include <default_thread.h>
 //
