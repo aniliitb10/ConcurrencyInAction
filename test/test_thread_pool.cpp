@@ -12,11 +12,11 @@ TEST_F(TestThreadPool, SimpleTest)
     const std::size_t thread_pool_size{10};
 
     std::vector<std::future<int>> futures{};
-    ThreadPool<int> thread_pool{thread_pool_size};
+    ThreadPool thread_pool{thread_pool_size};
     futures.reserve(nums.size());
     for (auto num : nums)
     {
-        futures.emplace_back(thread_pool.add_task([num]{return num;}));
+        futures.emplace_back(thread_pool.add_task([num] {return num;}));
     }
 
     std::vector<int> received{};

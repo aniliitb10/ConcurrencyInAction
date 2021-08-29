@@ -5,13 +5,13 @@
 #include <memory>
 #include <default_thread.h>
 #include <atomic>
+#include <type_traits>
 
-template <typename R>
 class ThreadPool
 {
 public:
-    ThreadPool(size_t size = std::thread::hardware_concurrency()) :
-    _size(std::max(size, static_cast<std::size_t>(1)))
+    explicit ThreadPool(size_t size = std::thread::hardware_concurrency()) :
+            _size(std::max(size, static_cast<std::size_t>(1)))
     {
         using namespace std::chrono_literals;
 
@@ -21,35 +21,37 @@ public:
         {
             _thread_count.fetch_add(1); // slightly inaccurate but that's fine
             _threads.emplace_back([&]()
-            {
-                while (!_stop)
-                {
-                    // its only job is to get the task and execute it, continuously
-                    auto task_ptr = _queue.try_pop_for(100ms);
-                    if (task_ptr)
-                    {
-                        auto& task = *task_ptr;
-                        task();
-                    }
-                }
-            });
+                                  {
+                                      while (!_stop)
+                                      {
+                                          // its only job is to get the task and execute it, continuously
+                                          auto task_ptr = _queue.try_pop_for(100ms);
+                                          if (task_ptr)
+                                          {
+                                              auto &task = *task_ptr;
+                                              task();
+                                          }
+                                      }
+                                  });
         }
     }
 
-    template <typename Func, typename... Args>
-    std::future<R> add_task(Func&& func, Args... args)
+    template<typename Func, typename... Args>
+    auto add_task(Func &&func, Args &&... args) -> std::future<std::invoke_result_t<Func, Args...>>
     {
         auto lambda = [func, args...]() {return func(args...);};
-        std::packaged_task<R()> task{lambda};
-        auto future = task.get_future();
-        _queue.push(std::move(task));
-        return future; // copy-elision guarantees move operation
+        using return_type = std::result_of_t<Func(Args...)>;
+        auto task_ptr = std::make_shared<std::packaged_task<return_type()>>(lambda);
+        auto future = task_ptr->get_future();
+        std::packaged_task<void()> stripped_task {[task_ptr](){auto& task = *task_ptr; task();}};
+        _queue.push(std::move(stripped_task));
+        return future;
     }
 
     void stop() noexcept
     {
         _stop = true;
-        for (auto& thread : _threads)
+        for (auto &thread: _threads)
         {
             thread.get_thread().join();
         }
@@ -62,7 +64,7 @@ public:
 
 private:
     std::size_t _size{};
-    BlockingQueue<std::packaged_task<R()>> _queue{};
+    BlockingQueue<std::packaged_task<void()>> _queue{};
     std::atomic_bool _stop{false};
     std::atomic_int32_t _thread_count{0};
     std::vector<DefaultThread> _threads{};
