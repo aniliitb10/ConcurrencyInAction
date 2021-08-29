@@ -39,12 +39,11 @@ public:
     template<typename Func, typename... Args>
     auto add_task(Func &&func, Args &&... args) -> std::future<std::invoke_result_t<Func, Args...>>
     {
-        auto lambda = [func, args...]() {return func(args...);};
+        auto lambda = [func, args...]() { return func(args...); };
         using return_type = std::result_of_t<Func(Args...)>;
-        auto task_ptr = std::make_shared<std::packaged_task<return_type()>>(lambda);
-        auto future = task_ptr->get_future();
-        std::packaged_task<void()> stripped_task {[task_ptr](){auto& task = *task_ptr; task();}};
-        _queue.push(std::move(stripped_task));
+        auto task = std::packaged_task<return_type()>{lambda};
+        auto future = task.get_future();
+        _queue.push(std::packaged_task<void()>([moved_task = std::move(task)]() mutable { moved_task(); }));
         return future;
     }
 
