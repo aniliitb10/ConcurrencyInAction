@@ -90,8 +90,15 @@ public:
 
     [[nodiscard]] std::pair<std::unique_ptr<T>, bool> try_pop_for(const std::chrono::milliseconds& wait_time) noexcept
     {
+        // wait_for might wait for way more than the wait_time
+        // - e.g. let's say when thread had almost waited for wait_time, then there was a spurious wakeup
+        //        and now, as the condition was not satisfied, cv will wait for another interval of wait_time
+        //        and this could go on repeatedly for very long time (unbounded wait time)
+        // Hence, it is better to call wait_till with a time point (bounded) rather than calling wait_for with duration
+        auto time_limit = std::chrono::high_resolution_clock::now() + wait_time;
+
         std::unique_lock lock(mutex);
-        if (_condition_variable.wait_for(lock, wait_time, [this]() {return !_queue.empty();}))
+        if (_condition_variable.wait_until(lock, time_limit, [this]() {return !_queue.empty();}))
         {
             auto ptr = std::make_unique<T>(std::move(_queue.front()));
             _queue.pop();

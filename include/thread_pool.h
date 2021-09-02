@@ -32,27 +32,12 @@ public:
                                       while (true)
                                       {
                                           // its only job is to get the task and execute it, continuously
-                                          auto[task_ptr, closed] = queue.try_pop();
-                                          if (task_ptr)
+                                          if (auto [task_ptr, closed] = queue.try_pop(); task_ptr)
                                           {
                                               (*task_ptr)();
                                           }
-
-                                          if (closed)
+                                          else if (closed)
                                           {
-                                              // this means that we don't have to wait for elements now
-                                              while (auto remaining_ptr = queue.try_pop_for(0ms).first)
-                                              {
-                                                  if (remaining_ptr)
-                                                  {
-                                                      (*remaining_ptr)();
-                                                  }
-                                                  else
-                                                  {
-                                                      break;
-                                                  }
-
-                                              }
                                               break;
                                           }
                                       }
