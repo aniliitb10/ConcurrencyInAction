@@ -22,7 +22,7 @@ struct BlockingQueueTest : public ::testing::Test
         StrWrapperMoveOnly& operator=(StrWrapperMoveOnly&&) = default;
 
         // provide a getter
-        const std::string& get() const {return _value; }
+        [[nodiscard]] const std::string& get() const {return _value; }
 
     private:
         std::string _value;
@@ -43,7 +43,8 @@ struct BlockingQueueTest : public ::testing::Test
 TEST_F(BlockingQueueTest, SimplePushPopTest)
 {
     // to test that queue is indeed thread safe
-    BlockingQueue<int> queue{};
+    using queue_type = BlockingQueue<int>;
+    queue_type queue{};
     const int thread_count{10};
     const int variable_count{1000};
 
@@ -56,7 +57,7 @@ TEST_F(BlockingQueueTest, SimplePushPopTest)
                              {
                                  for (int i = 0; i < variable_count; ++i)
                                  {
-                                     queue.push(i);
+                                     EXPECT_EQ(queue.push(i), queue_type::ErrorCode::NO_ERROR);
                                  }
                              });
     }
@@ -74,7 +75,8 @@ TEST_F(BlockingQueueTest, SimplePushPopTest)
         {
             for (int i = 0; i < variable_count; ++i)
             {
-                queue.pop();
+                auto num = queue.pop();
+                EXPECT_TRUE( num >= 0 && num < variable_count);
             }
         });
     }
@@ -85,16 +87,16 @@ TEST_F(BlockingQueueTest, SimplePushPopTest)
 TEST_F(BlockingQueueTest, BlockingTest)
 {
     using namespace std::chrono_literals;
-
-    BlockingQueue<int> queue{};
+    using queue_type = BlockingQueue<int>;
+    queue_type queue{};
     DefaultThread producer
     {
         [&queue]()
         {
-            queue.push(0);
-            queue.push(1);
+            EXPECT_EQ(queue.push(0), queue_type ::ErrorCode::NO_ERROR);
+            EXPECT_EQ(queue.push(1), queue_type ::ErrorCode::NO_ERROR);
             std::this_thread::sleep_for(1s);
-            queue.push(2);
+            EXPECT_EQ(queue.push(2), queue_type ::ErrorCode::NO_ERROR);
         }
     };
 
@@ -131,7 +133,8 @@ TEST_F(BlockingQueueTest, WithMoveOnlyTypes)
     using namespace std::chrono_literals;
 
     const std::string sample_string{"sample_string"};
-    BlockingQueue<StrWrapperMoveOnly> queue{};
+    using queue_type = BlockingQueue<StrWrapperMoveOnly>;
+    queue_type queue{};
     DefaultThread consumer{[&queue, &sample_string]
     {
         auto received_string = queue.pop();
@@ -140,5 +143,8 @@ TEST_F(BlockingQueueTest, WithMoveOnlyTypes)
 
     // this will go out of scope (joined) in next line
     // so, no need to limit its scope for quick evaluation
-    DefaultThread producer{[&sample_string, &queue](){queue.push(sample_string);}};
+    DefaultThread producer{[&sample_string, &queue]()
+    {
+        EXPECT_EQ(queue.push(sample_string), queue_type::ErrorCode::NO_ERROR);
+    }};
 }
