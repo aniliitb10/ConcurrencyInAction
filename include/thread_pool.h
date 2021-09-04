@@ -3,11 +3,11 @@
 #include <blocking_queue.h>
 #include <future>
 #include <memory>
-#include <atomic>
 #include <type_traits>
 #include <limits>
 
 using namespace std::chrono_literals;
+
 /**
  *  A thread pool to manage a group of threads to execute tasks
  *  It uses @BlockingQueue to store and extract tasks
@@ -24,36 +24,17 @@ public:
 
     /**
      * Constructor of ThreadPool class
-     * @param size: thread pool size, min 1 and default: std::max(std::thread::hardware_concurrency(), 1)
-     * @param max_queue_size: max queue size, default: std::numeric_limits<std::size_t>::max()
-     * @param wait_time: wait time for BlockingQueue, default: 10ms
+     * @param size thread pool size, min 1 and default: std::max(std::thread::hardware_concurrency(), 1)
+     * @param max_queue_size max queue size, default: std::numeric_limits<std::size_t>::max()
+     * @param wait_time wait time for BlockingQueue, default: 1ms
      */
     explicit ThreadPool(size_t size = std::thread::hardware_concurrency(),
                         std::size_t max_queue_size = std::numeric_limits<std::size_t>::max(),
-                        std::chrono::milliseconds wait_time = 10ms) :
-            _pool_size(std::max(size, static_cast<std::size_t>(1))),
+                        std::chrono::milliseconds wait_time = 1ms) :
+            _max_pool_size(std::max(size, static_cast<std::size_t>(1))),
             _queue(max_queue_size, wait_time)
     {
-        // it will keep creating threads even when thread_pool was stopped
-        for (std::size_t i = 0; i < _pool_size; ++i)
-        {
-            _thread_count.fetch_add(1); // slightly inaccurate but that's fine
-            _threads.emplace_back([&queue = _queue]()
-                                  {
-                                      while (true)
-                                      {
-                                          // its only job is to get the task and execute it, continuously
-                                          if (auto [task_ptr, closed] = queue.try_pop(); task_ptr)
-                                          {
-                                              (*task_ptr)();
-                                          }
-                                          else if (closed)
-                                          {
-                                              break;
-                                          }
-                                      }
-                                  });
-        }
+        launch_threads();
     }
 
     /**
@@ -64,7 +45,7 @@ public:
      * @tparam Args: The type of arguments for the task
      * @param func: The task for the thread pool
      * @param args: The arguments for the task
-     * @return: std::pair<future, queue_type::ErrorCode>
+     * @return std::pair<future, queue_type::ErrorCode>
      * - Future is to get the returned value from the task
      * - ErrorCode is ErrorCode::NO_ERROR iff task was enqueued successfully
      */
@@ -78,6 +59,9 @@ public:
         auto future = task.get_future();
         auto status = _queue.push(
                 std::packaged_task<void()>([moved_task = std::move(task)]() mutable { moved_task(); }));
+
+        // check if some threads are yet to be launched
+        launch_threads();
         return std::pair<std::future<return_type>, queue_type::ErrorCode>(std::move(future), status);
     }
 
@@ -90,9 +74,9 @@ public:
         }
     }
 
-    [[nodiscard]] int get_thread_count() const noexcept
+    [[nodiscard]] std::size_t get_thread_count() const noexcept
     {
-        return _thread_count.load();
+        return _thread_count;
     }
 
     virtual ~ThreadPool()
@@ -101,8 +85,46 @@ public:
     }
 
 private:
-    std::size_t _pool_size{};
+    /**
+     * Intention is to create threads only if there is at least one task to execute
+     */
+    void launch_threads()
+    {
+        while (_thread_count < _max_pool_size)
+        {
+            auto[initial_task_ptr, is_closed] = _queue.try_pop();
+            if (initial_task_ptr)
+            {
+                ++_thread_count;
+                _threads.emplace_back([this, initial_task_ptr = std::move(initial_task_ptr)]()
+                                      {
+                                          (*initial_task_ptr)(); // execute the first task first
+                                          while (true)
+                                          {
+                                              // its only job is to get the task and execute it, continuously
+                                              if (auto[task_ptr, closed] = _queue.try_pop(); task_ptr)
+                                              {
+                                                  (*task_ptr)();
+                                              }
+                                              else if (closed)
+                                              {
+                                                  break;
+                                              }
+                                          }
+                                      });
+            }
+            else
+            {
+                // there is no pending task to execute, hence better to not launch any threads
+                return;
+            }
+        }
+    }
+
+    // The class is not intended to be thread-safe, hence there is no need to use atomics
+    // The only member variable which is accessed via multiple threads is queue_type, and it is thread-safe
+    const std::size_t _max_pool_size;
     queue_type _queue{};
-    std::atomic_int32_t _thread_count{0};
+    std::size_t _thread_count{0};
     std::vector<std::thread> _threads{};
 };
