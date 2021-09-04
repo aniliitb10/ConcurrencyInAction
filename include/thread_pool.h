@@ -8,23 +8,34 @@
 #include <limits>
 
 using namespace std::chrono_literals;
-
+/**
+ *  A thread pool to manage a group of threads to execute tasks
+ *  It uses @BlockingQueue to store and extract tasks
+ *
+ *  @note: ThreadPool class itself is not thread safe, it is expected to be used from just one thread
+ *  - otherwise, mutex must be used for synchronization
+ *
+ */
 class ThreadPool
 {
 public:
 
     using queue_type = BlockingQueue<std::packaged_task<void()>>;
 
+    /**
+     * Constructor of ThreadPool class
+     * @param size: thread pool size, min 1 and default: std::max(std::thread::hardware_concurrency(), 1)
+     * @param max_queue_size: max queue size, default: std::numeric_limits<std::size_t>::max()
+     * @param wait_time: wait time for BlockingQueue, default: 10ms
+     */
     explicit ThreadPool(size_t size = std::thread::hardware_concurrency(),
                         std::size_t max_queue_size = std::numeric_limits<std::size_t>::max(),
                         std::chrono::milliseconds wait_time = 10ms) :
-            _max_pool_size(std::max(size, static_cast<std::size_t>(1))),
+            _pool_size(std::max(size, static_cast<std::size_t>(1))),
             _queue(max_queue_size, wait_time)
     {
-        using namespace std::chrono_literals;
-
         // it will keep creating threads even when thread_pool was stopped
-        for (std::size_t i = 0; i < _max_pool_size; ++i)
+        for (std::size_t i = 0; i < _pool_size; ++i)
         {
             _thread_count.fetch_add(1); // slightly inaccurate but that's fine
             _threads.emplace_back([&queue = _queue]()
@@ -75,7 +86,7 @@ public:
         _queue.close();
         for (auto &thread: _threads)
         {
-            thread.join();
+            if (thread.joinable()) thread.join();
         }
     }
 
@@ -90,7 +101,7 @@ public:
     }
 
 private:
-    std::size_t _max_pool_size{};
+    std::size_t _pool_size{};
     queue_type _queue{};
     std::atomic_int32_t _thread_count{0};
     std::vector<std::thread> _threads{};
