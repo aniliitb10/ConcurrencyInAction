@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 #include <future>
 #include <mutex>
+#include "util.h"
+
 
 struct BlockingQueueTest : public ::testing::Test
 {
@@ -95,7 +97,7 @@ TEST_F(BlockingQueueTest, BlockingTest)
         {
             EXPECT_EQ(queue.push(0), queue_type ::ErrorCode::NO_ERROR);
             EXPECT_EQ(queue.push(1), queue_type ::ErrorCode::NO_ERROR);
-            std::this_thread::sleep_for(1s);
+            std::this_thread::sleep_for(0.5s);
             EXPECT_EQ(queue.push(2), queue_type ::ErrorCode::NO_ERROR);
         }
     };
@@ -104,19 +106,24 @@ TEST_F(BlockingQueueTest, BlockingTest)
     {
         [&queue]()
         {
+            // allow some buffer time to get items on the queue
+            std::this_thread::sleep_for(0.2s);
+            EXPECT_EQ(2, queue.size());
             EXPECT_EQ(0, queue.pop());
-            std::this_thread::sleep_for(0.5s);
+
+            EXPECT_EQ(1, queue.size());
             EXPECT_EQ(1, queue.pop());
+
+            // next item will be pushed on queue after 1 sec
+            EXPECT_EQ(0, queue.size());
+
+            // now wait for it to be pushed
+            std::this_thread::sleep_for(0.5s);
+            EXPECT_EQ(1, queue.size());
             EXPECT_EQ(2, queue.pop()); // this will keep waiting for producer to produce
+            EXPECT_EQ(0, queue.size());
         }
     };
-
-    std::this_thread::sleep_for(0.2s);
-    EXPECT_EQ(1, queue.size()); // producer produced 2 but consumer consumed 1
-    std::this_thread::sleep_for(0.4s);
-    EXPECT_EQ(0, queue.size()); // producer produced 2 and consumer consumed 2
-    std::this_thread::sleep_for(0.5s);
-    EXPECT_EQ(0, queue.size()); // producer produced 3 and consumer consumed 3
 }
 
 TEST_F(BlockingQueueTest, ConstructionTest)
@@ -147,4 +154,14 @@ TEST_F(BlockingQueueTest, WithMoveOnlyTypes)
     {
         EXPECT_EQ(queue.push(sample_string), queue_type::ErrorCode::NO_ERROR);
     }};
+}
+
+TEST_F(BlockingQueueTest, MaxSizeTest)
+{
+    BlockingQueue<int> queue{20};
+    auto nums = get_random_int_vec(queue.get_max_size());
+    for ( auto i : nums) {
+        EXPECT_EQ(BlockingQueue<int>::ErrorCode::NO_ERROR, queue.push(i));
+    }
+    EXPECT_EQ(BlockingQueue<int>::ErrorCode::QUEUE_FULL, queue.push(0));
 }

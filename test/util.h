@@ -7,6 +7,10 @@
 #include <string>
 #include <numeric>
 #include <vector>
+#include <chrono>
+#include <thread>
+
+using namespace std::chrono_literals;
 
 template <typename Itr>
 void print(Itr begin, Itr end, char sep = ' ', bool newline = true)
@@ -112,6 +116,22 @@ void fill_random_int(OutputIt it, int count)
     fill_random_int(it, min, max, count);
 }
 
+inline
+std::vector<int> get_random_int_vec(int from, int to, int count)
+{
+    std::vector<int> ret{};
+    fill_random_int(std::back_inserter(ret), from, to, count);
+    return ret;
+}
+
+inline
+std::vector<int> get_random_int_vec(std::size_t count)
+{
+    std::vector<int> ret{};
+    fill_random_int(std::back_inserter(ret), count);
+    return ret;
+}
+
 static int get_random_number(int from_, int to_)
 {
     // intentionally making static
@@ -126,4 +146,14 @@ template <typename T=int>
 std::vector<T> get_vector(std::initializer_list<T> list)
 {
     return std::vector<T>(list);
+}
+
+// to get a slow dummy task for testing threadpool
+inline
+auto get_slow_task(std::chrono::milliseconds ms, int num = 0)
+{
+    return [ms, num] {
+        std::this_thread::sleep_for(ms);
+        return num;
+    };
 }

@@ -20,7 +20,7 @@ public:
 
     DefaultThread() noexcept = delete;
 
-    DefaultThread(std::thread&& thread, Action action = Action::Join) : _action(action), _thread(std::move(thread))
+    explicit DefaultThread(std::thread&& thread, Action action = Action::Join) : _action(action), _thread(std::move(thread))
     {
         if (!_thread.joinable())
         {
@@ -29,7 +29,7 @@ public:
     }
 
     template<class Callable, class... Args, typename = std::enable_if_t<std::is_invocable_v<Callable, Args...>>>
-    DefaultThread(Callable&& callable, Args... args, Action action = Action::Join):
+    explicit DefaultThread(Callable&& callable, Args... args, Action action = Action::Join):
     _thread(std::forward<Callable>(callable), std::forward<Args>(args)...),
     _action(action)
     {} // this will be joinable, no need to check
