@@ -43,7 +43,7 @@ template <typename T>
 constexpr bool is_string_like_type_v = string_like_type<T>::value;
 
 
-// to determine if type T is an iterable
+// to determine if type TaskType is an iterable
 // - string like containers are exempted from this
 template <typename T, typename = void>
 struct is_iterable : std::false_type

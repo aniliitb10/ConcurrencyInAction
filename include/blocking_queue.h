@@ -14,22 +14,52 @@
 
 using namespace std::chrono_literals;
 
+/**
+ * This enum represents the cases when enqueuing on the underlying queue failed
+ */
+enum class ErrorCode : uint8_t
+{
+    NO_ERROR, // Enqueued successfully, no error
+    QUEUE_FULL, // Enqueuing failed as queue was full
+    QUEUE_CLOSED // Enqueuing failed as queue was closed
+};
+
+template <typename PriorityType, typename TaskType>
+struct PriorityWrapper {
+
+    template<class... Args >
+    explicit PriorityWrapper(PriorityType priority, Args&&... args) :
+    _priority(priority), _task(std::forward<Args>(args)...) {}
+
+    PriorityWrapper(PriorityWrapper&&)  noexcept = default;
+    PriorityWrapper& operator=(PriorityWrapper&&)  noexcept = default;
+
+    auto operator()() -> std::invoke_result_t<TaskType> {
+        return _task();
+    }
+
+    bool operator<(const PriorityWrapper &rhs) const noexcept{
+        return _priority < rhs._priority;
+    }
+
+    bool operator==(const PriorityWrapper &rhs) const noexcept{
+        return _priority == rhs._priority;
+    }
+
+    PriorityType _priority;
+    TaskType _task;
+};
+
+template <typename TaskType>
+using IntPriorityWrapper = PriorityWrapper<int, TaskType>;
+
 template <typename T,
           typename Container = std::queue<T>,
           typename = std::enable_if_t<std::is_move_constructible_v<T>>>
 class BlockingQueue
 {
 public:
-
-    /**
-     * This enum represents the cases when enqueuing on the underlying queue failed
-     */
-    enum class ErrorCode : uint8_t
-    {
-        NO_ERROR, // Enqueued successfully, no error
-        QUEUE_FULL, // Enqueuing failed as queue was full
-        QUEUE_CLOSED // Enqueuing failed as queue was closed
-    };
+    using container_type = Container;
 
     /**
      * Constructor for BlockingQueue
@@ -42,7 +72,7 @@ public:
     _wait_time(wait_time)
     {
         // currently accepted type is only std::queue or std::multiset
-        static_assert(std::is_same_v<Container, std::queue<T>> || std::is_same_v<Container, std::multiset<T>>);
+        static_assert(std::is_same_v<Container, std::queue<T>> || std::is_same_v<Container, std::multiset<T>> );
     }
 
     /**
@@ -51,7 +81,7 @@ public:
      * @return true if insertion was successful
      */
     template<class... Args>
-    [[nodiscard]] auto push(Args&& ... args) -> std::enable_if_t<std::is_constructible_v<T, Args...>, ErrorCode> {
+    [[nodiscard]] auto push(Args&& ... args) -> std::enable_if_t<std::is_constructible_v<T, Args&&...>, ErrorCode> {
         {
             std::lock_guard lock_guard(mutex);
             if (auto code = unsafe_check_if_insertable(); code != ErrorCode::NO_ERROR) return code;
@@ -61,17 +91,16 @@ public:
         return ErrorCode::NO_ERROR;
     }
 
-
     /**
      * Waits for en element to be there in the queue
      * No timeout, waits forever.
      * @note: this will keep waiting even if queue has been closed
-     * - reason: as the return type is T and not std::unique_ptr<T>,
+     * - reason: as the return type is TaskType and not std::unique_ptr<TaskType>,
      *           there is no default value (at least, not for every type) to return when the queue is closed
      * @return the element at the front of the queue
      */
     [[nodiscard]] T pop() {
-        auto elem = try_pop_for(std::chrono::milliseconds::max()).first;
+        auto elem = std::move(try_pop_for(std::chrono::milliseconds::max()).first);
         if (!elem) {
             throw std::runtime_error("Timed out waiting for task");
         }
@@ -103,7 +132,8 @@ public:
         // It can also be called with std::chrono::milliseconds::max() if it is planned to wait forever
         // -- 'forever' is roughly 24h,
         // -- milliseconds::max() (https://en.cppreference.com/w/cpp/chrono/duration/max) doesn't work for some reason
-        auto time_limit = std::chrono::high_resolution_clock::now() + ((wait_time == std::chrono::milliseconds::max()) ? 24h : wait_time);
+        auto time_limit = std::chrono::high_resolution_clock::now() +
+                ((wait_time == std::chrono::milliseconds::max()) ? 24h : wait_time);
 
         std::unique_lock lock(mutex);
         if (_condition_variable.wait_until(lock, time_limit, [this]() {return !_queue.empty();})) {
@@ -113,9 +143,11 @@ public:
                 return std::pair<std::unique_ptr<T>, bool>(std::move(ptr), _closed);
             }
             else if constexpr (std::is_same_v<Container, std::multiset<T>>) {
-                auto last_item_itr = std::make_move_iterator(std::prev(std::end(_queue)));
-                auto ptr = std::make_unique<T>(*last_item_itr);
-                _queue.erase(last_item_itr);
+                auto itr = _queue.begin();
+                // extract is the only way to take a move-only object out of a set
+                // https://en.cppreference.com/w/cpp/container/multiset/extract
+                auto ptr = std::make_unique<T>(std::move(_queue.extract(itr).value()));
+                //_queue.erase(itr);
                 return std::pair<std::unique_ptr<T>, bool>(std::move(ptr), _closed);
             }
         }
@@ -161,7 +193,6 @@ public:
     [[nodiscard]] std::size_t get_max_size() const noexcept {
         return _max_size;
     }
-
 
 private:
     /**

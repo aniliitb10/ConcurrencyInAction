@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 #include <future>
 #include <mutex>
+#include <set>
+#include <algorithm>
 #include "util.h"
 
 
@@ -59,7 +61,7 @@ TEST_F(BlockingQueueTest, SimplePushPopTest)
                              {
                                  for (int i = 0; i < variable_count; ++i)
                                  {
-                                     EXPECT_EQ(queue.push(i), queue_type::ErrorCode::NO_ERROR);
+                                     EXPECT_EQ(queue.push(i), ErrorCode::NO_ERROR);
                                  }
                              });
     }
@@ -95,10 +97,10 @@ TEST_F(BlockingQueueTest, BlockingTest)
     {
         [&queue]()
         {
-            EXPECT_EQ(queue.push(0), queue_type ::ErrorCode::NO_ERROR);
-            EXPECT_EQ(queue.push(1), queue_type ::ErrorCode::NO_ERROR);
+            EXPECT_EQ(queue.push(0), ErrorCode::NO_ERROR);
+            EXPECT_EQ(queue.push(1), ErrorCode::NO_ERROR);
             std::this_thread::sleep_for(0.5s);
-            EXPECT_EQ(queue.push(2), queue_type ::ErrorCode::NO_ERROR);
+            EXPECT_EQ(queue.push(2), ErrorCode::NO_ERROR);
         }
     };
 
@@ -152,7 +154,7 @@ TEST_F(BlockingQueueTest, WithMoveOnlyTypes)
     // so, no need to limit its scope for quick evaluation
     DefaultThread producer{[&sample_string, &queue]()
     {
-        EXPECT_EQ(queue.push(sample_string), queue_type::ErrorCode::NO_ERROR);
+        EXPECT_EQ(queue.push(sample_string), ErrorCode::NO_ERROR);
     }};
 }
 
@@ -161,7 +163,61 @@ TEST_F(BlockingQueueTest, MaxSizeTest)
     BlockingQueue<int> queue{20};
     auto nums = get_random_int_vec(queue.get_max_size());
     for ( auto i : nums) {
-        EXPECT_EQ(BlockingQueue<int>::ErrorCode::NO_ERROR, queue.push(i));
+        EXPECT_EQ(ErrorCode::NO_ERROR, queue.push(i));
     }
-    EXPECT_EQ(BlockingQueue<int>::ErrorCode::QUEUE_FULL, queue.push(0));
+    EXPECT_EQ(ErrorCode::QUEUE_FULL, queue.push(0));
+}
+
+TEST_F(BlockingQueueTest, PriorityTest) {
+    using ElemType = IntPriorityWrapper<std::function<int()>>;
+    using ContainerType = std::multiset<ElemType>;
+    using QueueType = BlockingQueue<ElemType, ContainerType>;
+    QueueType queue{};
+
+    auto nums = get_vector({4,5,6,1,-1,0,5});
+    auto sorted_nums{nums};
+    std::sort(sorted_nums.begin(), sorted_nums.end());
+    EXPECT_NE(nums, sorted_nums);
+
+    for (auto num : nums)
+    {
+        EXPECT_EQ(ErrorCode::NO_ERROR, queue.push(num, [num]{return num;}));
+    }
+
+    std::vector<int> returned_nums{};
+    for (auto n : nums)
+    {
+        auto popped_elem = queue.pop();
+        EXPECT_EQ(popped_elem._priority, popped_elem._task());
+        returned_nums.push_back(popped_elem._priority);
+    }
+
+    EXPECT_EQ(sorted_nums, returned_nums);
+}
+
+TEST_F(BlockingQueueTest, PriorityStressTest) {
+    using ElemType = IntPriorityWrapper<std::function<int()>>;
+    using ContainerType = std::multiset<ElemType>;
+    using QueueType = BlockingQueue<ElemType, ContainerType>;
+    QueueType queue{};
+
+    auto nums = get_random_int_vec(10'000);
+    auto sorted_nums{nums};
+    std::sort(sorted_nums.begin(), sorted_nums.end());
+    EXPECT_NE(nums, sorted_nums);
+
+    for (auto num : nums)
+    {
+        EXPECT_EQ(ErrorCode::NO_ERROR, queue.push(num, [num]{return num;}));
+    }
+
+    std::vector<int> returned_nums{};
+    for (auto n : nums)
+    {
+        auto popped_elem = queue.pop();
+        EXPECT_EQ(popped_elem._priority, popped_elem._task());
+        returned_nums.push_back(popped_elem._priority);
+    }
+
+    EXPECT_EQ(sorted_nums, returned_nums);
 }
