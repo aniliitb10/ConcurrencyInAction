@@ -7,16 +7,13 @@
 #include <ostream>
 #include <fmt/format.h>
 
-namespace dt
-{
-    struct time_t
-    {
+namespace dt {
+    struct time_t {
         explicit time_t(const date::hh_mm_ss<std::chrono::milliseconds> &hh_mm_ss) :
                 hours(hh_mm_ss.hours().count()),
                 minutes(hh_mm_ss.minutes().count()),
                 secs(hh_mm_ss.seconds().count()),
-                milli_secs(hh_mm_ss.subseconds().count())
-        {}
+                milli_secs(hh_mm_ss.subseconds().count()) {}
 
         friend std::ostream &operator<<(std::ostream &out, const time_t &);
 
@@ -26,15 +23,13 @@ namespace dt
         uint16_t milli_secs;
     };
 
-    std::ostream &operator<<(std::ostream &out, const time_t &time)
-    {
+    std::ostream &operator<<(std::ostream &out, const time_t &time) {
         // :0>2 -> '0' is the filler, '>' means actual text should be right aligned, '2' -> is the length including filler
         out << fmt::format("{:0>2}:{:0>2}:{:0>2}:{:0>3}", time.hours, time.minutes, time.secs, time.milli_secs);
         return out;
     }
 
-    class datetime
-    {
+    class datetime {
     public:
         using date_t = date::year_month_day;
 
@@ -43,18 +38,15 @@ namespace dt
                 date(date::floor<date::days>(time_point)),
                 time(date::hh_mm_ss{date::floor<std::chrono::milliseconds>(
                         time_point - date::floor<date::days>(time_point)
-                )})
-        {}
+                )}) {}
 
-        static datetime datetime_IST()
-        {
+        static datetime datetime_IST() {
             // this is, precisely, only for IST
             using namespace std::chrono_literals;
             return datetime{std::chrono::system_clock::now() + (5h + 30min)};
         }
 
-        static datetime now()
-        {
+        static datetime now() {
             return datetime{};
         }
 
@@ -67,8 +59,7 @@ namespace dt
         time_t time;
     };
 
-    std::ostream &operator<<(std::ostream &out, const datetime &datetime)
-    {
+    std::ostream &operator<<(std::ostream &out, const datetime &datetime) {
         out << datetime.date << " " << datetime.time;
         return out;
     }

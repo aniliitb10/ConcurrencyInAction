@@ -64,7 +64,7 @@ public:
         auto task = std::packaged_task<return_type()>{lambda};
         auto future = task.get_future();
         auto status = _queue.push(
-                Elem([moved_task = std::move(task)]() mutable { moved_task(); } // using c style casting
+                Elem([moved_task = std::move(task)]() mutable { moved_task(); }
                 )
         );
 
@@ -137,10 +137,10 @@ public:
 private:
     /**
      * Intention is to create threads only if there is at least one task to execute
-     * This is called from constructor as well as when adding a task
+     * This is called when adding a task
      *  - It is called while adding the task because, may be, initially all threads were not created
      *  - So, calling them while adding new tasks will try to utilize maximum quota of threads
-     *  This method will never be called simultaneously from different threads
+     *  This method will NEVER be called simultaneously from different threads
      *  - As this class is not thread safe, @add_task MUST NOT be called from multiple threads
      *  - And @add_task will only be called after construction
      */

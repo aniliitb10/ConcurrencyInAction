@@ -17,18 +17,16 @@ using namespace std::chrono_literals;
 /**
  * This enum represents the cases when enqueuing on the underlying queue failed
  */
-enum class ErrorCode : uint8_t
-{
+enum class ErrorCode : uint8_t {
     NO_ERROR, // Enqueued successfully, no error
     QUEUE_FULL, // Enqueuing failed as queue was full
     QUEUE_CLOSED // Enqueuing failed as queue was closed
 };
 
-template <typename T,
-          typename Container = std::queue<T>,
-          typename = std::enable_if_t<std::is_move_constructible_v<T>>>
-class BlockingQueue
-{
+template<typename T,
+        typename Container = std::queue<T>,
+        typename = std::enable_if_t<std::is_move_constructible_v<T>>>
+class BlockingQueue {
 public:
     /**
      * Constructor for BlockingQueue
@@ -36,12 +34,11 @@ public:
      * @param wait_time: milliseconds to wait_for during try_pop from the queue, defaults to 0
      */
     explicit BlockingQueue(std::size_t max_size = std::numeric_limits<std::size_t>::max(),
-                           std::chrono::milliseconds wait_time = 0ms):
-    _max_size(max_size),
-    _wait_time(wait_time)
-    {
+                           std::chrono::milliseconds wait_time = 0ms) :
+            _max_size(max_size),
+            _wait_time(wait_time) {
         // currently accepted type is only std::queue or std::multiset
-        static_assert(std::is_same_v<Container, std::queue<T>> || std::is_same_v<Container, std::multiset<T>> );
+        static_assert(std::is_same_v<Container, std::queue<T>> || std::is_same_v<Container, std::multiset<T>>);
     }
 
     /**
@@ -50,7 +47,7 @@ public:
      * @return true if insertion was successful
      */
     template<class... Args>
-    [[nodiscard]] auto push(Args&& ... args) -> std::enable_if_t<std::is_constructible_v<T, Args&&...>, ErrorCode> {
+    [[nodiscard]] auto push(Args &&... args) -> std::enable_if_t<std::is_constructible_v<T, Args && ...>, ErrorCode> {
         {
             std::lock_guard lock_guard(mutex);
             if (auto code = unsafe_check_if_insertable(); code != ErrorCode::NO_ERROR) return code;
@@ -91,8 +88,7 @@ public:
      * - pair.second returns true if queue has been closed
      */
 
-    [[nodiscard]] std::pair<std::unique_ptr<T>, bool> try_pop_for(const std::chrono::milliseconds& wait_time) noexcept
-    {
+    [[nodiscard]] std::pair<std::unique_ptr<T>, bool> try_pop_for(const std::chrono::milliseconds &wait_time) noexcept {
         // wait_for might wait for way more than the wait_time
         // - e.g. let's say when thread had almost waited for wait_time, then there was a spurious wakeup
         //        and now, as the condition was not satisfied, cv will wait for another interval of wait_time
@@ -102,16 +98,15 @@ public:
         // -- 'forever' is roughly 24h,
         // -- milliseconds::max() (https://en.cppreference.com/w/cpp/chrono/duration/max) doesn't work for some reason
         auto time_limit = std::chrono::high_resolution_clock::now() +
-                ((wait_time == std::chrono::milliseconds::max()) ? 24h : wait_time);
+                          ((wait_time == std::chrono::milliseconds::max()) ? 24h : wait_time);
 
         std::unique_lock lock(mutex);
-        if (_condition_variable.wait_until(lock, time_limit, [this]() {return !_queue.empty();})) {
+        if (_condition_variable.wait_until(lock, time_limit, [this]() { return !_queue.empty(); })) {
             if constexpr (std::is_same_v<Container, std::queue<T>>) {
                 auto ptr = std::make_unique<T>(std::move(_queue.front()));
                 _queue.pop();
                 return std::pair<std::unique_ptr<T>, bool>(std::move(ptr), _closed);
-            }
-            else if constexpr (std::is_same_v<Container, std::multiset<T>>) {
+            } else if constexpr (std::is_same_v<Container, std::multiset<T>>) {
                 auto itr = _queue.begin();
                 // extract is the only way to take a move-only object out of a set
                 // https://en.cppreference.com/w/cpp/container/multiset/extract

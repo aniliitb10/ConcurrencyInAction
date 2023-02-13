@@ -6,45 +6,38 @@
 
 //std::size_t terminate_counter{0};
 
-struct TestDefaultThread : public ::testing::Test
-{
+struct TestDefaultThread : public ::testing::Test {
     std::size_t _call_counter{};
 };
 
-TEST_F(TestDefaultThread, SimpleTest)
-{
+TEST_F(TestDefaultThread, SimpleTest) {
     EXPECT_EXCEPTION(DefaultThread thread{std::thread{}}, std::logic_error, "No underlying thread");
 }
 
-TEST_F(TestDefaultThread, ThreadJoinTest)
-{
+TEST_F(TestDefaultThread, ThreadJoinTest) {
     auto call_counter = _call_counter;
     {
-        DefaultThread thread{[this]()
-                             { _call_counter++; }}; // ensures join and hence, function completes
+        DefaultThread thread{[this]() { _call_counter++; }}; // ensures join and hence, function completes
     }
     EXPECT_EQ(call_counter + 1, _call_counter);
 
     // again using std::thread explicitly
     call_counter = _call_counter;
     {
-        DefaultThread thread{std::thread{[this]()
-                                         { _call_counter++; }}};
+        DefaultThread thread{std::thread{[this]() { _call_counter++; }}};
     }
     EXPECT_EQ(call_counter + 1, _call_counter);
 }
 
-TEST_F(TestDefaultThread, ThreadDetachTest)
-{
+TEST_F(TestDefaultThread, ThreadDetachTest) {
     auto call_counter = _call_counter;
     using namespace std::literals::chrono_literals;
     // ensures detach and hence, function takes at least one second to complete
     // hence, call_counter doesn't change in next line
-    DefaultThread thread{[this]()
-                         {
-                             std::this_thread::sleep_for(1s);
-                             _call_counter++;
-                         }, DefaultThread::Action::Detach};
+    DefaultThread thread{[this]() {
+        std::this_thread::sleep_for(1s);
+        _call_counter++;
+    }, DefaultThread::Action::Detach};
     EXPECT_EQ(call_counter, _call_counter);
 
     // but may be sleep for 2 seconds, and then check again
@@ -52,8 +45,7 @@ TEST_F(TestDefaultThread, ThreadDetachTest)
     EXPECT_EQ(call_counter + 1, _call_counter);
 }
 
-TEST_F(TestDefaultThread, ConstructibleTest)
-{
+TEST_F(TestDefaultThread, ConstructibleTest) {
     static_assert(!std::is_trivially_constructible_v<DefaultThread>);
     static_assert(!std::is_copy_constructible_v<DefaultThread>);
     static_assert(!std::is_default_constructible_v<DefaultThread>);

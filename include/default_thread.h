@@ -9,71 +9,60 @@
  * either join or detach: can be mentioned at compile time, default is join
  * */
 
-class DefaultThread
-{
+class DefaultThread {
 public:
-    enum class Action
-    {
+    enum class Action {
         Join,
         Detach
     };
 
     DefaultThread() noexcept = delete;
 
-    explicit DefaultThread(std::thread&& thread, Action action = Action::Join) : _action(action), _thread(std::move(thread))
-    {
-        if (!_thread.joinable())
-        {
+    explicit DefaultThread(std::thread &&thread, Action action = Action::Join) : _action(action),
+                                                                                 _thread(std::move(thread)) {
+        if (!_thread.joinable()) {
             throw std::logic_error{"No underlying thread"};
         }
     }
 
     template<class Callable, class... Args, typename = std::enable_if_t<std::is_invocable_v<Callable, Args...>>>
-    explicit DefaultThread(Callable&& callable, Args... args, Action action = Action::Join):
-    _thread(std::forward<Callable>(callable), std::forward<Args>(args)...),
-    _action(action)
-    {} // this will be joinable, no need to check
+    explicit DefaultThread(Callable &&callable, Args... args, Action action = Action::Join):
+            _thread(std::forward<Callable>(callable), std::forward<Args>(args)...),
+            _action(action) {} // this will be joinable, no need to check
 
-    DefaultThread(DefaultThread&&) noexcept = default;
-    DefaultThread& operator=(DefaultThread&&) noexcept = default;
+    DefaultThread(DefaultThread &&) noexcept = default;
 
-    DefaultThread& operator=(std::thread&& thread) = delete; // as there is no way to set action
-    DefaultThread& operator=(const DefaultThread&)  = delete;
-    DefaultThread(const DefaultThread&)  = delete;
+    DefaultThread &operator=(DefaultThread &&) noexcept = default;
+
+    DefaultThread &operator=(std::thread &&thread) = delete; // as there is no way to set action
+    DefaultThread &operator=(const DefaultThread &) = delete;
+
+    DefaultThread(const DefaultThread &) = delete;
 
 
-    virtual ~DefaultThread()
-    {
-        if (joinable())
-        {
-            if (_action == Action::Join)
-            {
+    virtual ~DefaultThread() {
+        if (joinable()) {
+            if (_action == Action::Join) {
                 _thread.join();
-            }
-            else
-            {
+            } else {
                 _thread.detach();
             }
         }
     }
 
-    [[nodiscard]] bool joinable() const noexcept
-    {
+    [[nodiscard]] bool joinable() const noexcept {
         return _thread.joinable();
     }
 
-    [[nodiscard]] Action get_action() const noexcept
-    {
+    [[nodiscard]] Action get_action() const noexcept {
         return _action;
     }
 
-    [[nodiscard]] const std::thread &get_thread() const noexcept
-    {
+    [[nodiscard]] const std::thread &get_thread() const noexcept {
         return _thread;
     }
 
-    [[nodiscard]] std::thread &get_thread() noexcept
-    {
+    [[nodiscard]] std::thread &get_thread() noexcept {
         return _thread;
     }
 

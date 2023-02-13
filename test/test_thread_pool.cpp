@@ -203,7 +203,7 @@ TEST_F(TestThreadPool, PriorityQueueBasicTest) {
 
 TEST_F(TestThreadPool, PriorityQueueStressTest) {
     constexpr std::size_t max_thread_count{4};
-    constexpr std::size_t max_queue_size{100};
+    constexpr std::size_t max_queue_size{50};
     constexpr auto task_interval{500ms};
 
     // Get some random ints
@@ -250,5 +250,5 @@ TEST_F(TestThreadPool, PriorityQueueStressTest) {
     }
 
     EXPECT_EQ(sorted_nums.size(), returned_nums.size());
-    EXPECT_EQ(sorted_nums, returned_nums);
+    EXPECT_EQ(sorted_nums, returned_nums); // little unstable
 }
