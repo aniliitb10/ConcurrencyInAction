@@ -1,5 +1,6 @@
 #include <blocking_queue.h>
 #include <default_thread.h>
+#include <priority_wrapper.h>
 #include <gtest/gtest.h>
 #include <future>
 #include <mutex>
@@ -169,7 +170,7 @@ TEST_F(BlockingQueueTest, MaxSizeTest)
 }
 
 TEST_F(BlockingQueueTest, PriorityTest) {
-    using ElemType = IntPriorityWrapper<std::function<int()>>;
+    using ElemType = PriorityWrapper<std::function<int()>>;
     using ContainerType = std::multiset<ElemType>;
     using QueueType = BlockingQueue<ElemType, ContainerType>;
     QueueType queue{};
@@ -196,7 +197,7 @@ TEST_F(BlockingQueueTest, PriorityTest) {
 }
 
 TEST_F(BlockingQueueTest, PriorityStressTest) {
-    using ElemType = IntPriorityWrapper<std::function<int()>>;
+    using ElemType = PriorityWrapper<std::function<int()>>;
     using ContainerType = std::multiset<ElemType>;
     using QueueType = BlockingQueue<ElemType, ContainerType>;
     QueueType queue{};

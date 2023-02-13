@@ -6,6 +6,7 @@
 #include <type_traits>
 #include <limits>
 #include <thread>
+#include <priority_wrapper.h>
 
 using namespace std::chrono_literals;
 
@@ -19,32 +20,32 @@ using namespace std::chrono_literals;
  */
 
 // Following are some aliases to avoid boilerplate code
-using ElemType = std::packaged_task<void()>;
-using SequentialQueueType = BlockingQueue<ElemType>;
+using Elem = std::packaged_task<void()>;
+using SequentialQueue = BlockingQueue<Elem>;
 
-using PriorityElemType = IntPriorityWrapper<ElemType>;
-using PriorityQueueType = BlockingQueue<PriorityElemType, std::multiset<PriorityElemType>>;
+using PriorityElem = PriorityWrapper<Elem>;
+using PriorityQueue = BlockingQueue<PriorityElem, std::multiset<PriorityElem>>;
 
 template <typename Func, typename... Args>
 using TaskReturnType = std::pair<std::future<std::invoke_result_t<Func, Args&&...>>, ErrorCode>;
 
-template <typename QueueType = SequentialQueueType>
+template <typename QueueType = SequentialQueue>
 class ThreadPool {
 public:
     /**
      * Constructor of ThreadPool class
-     * @param size thread pool size, min 1 and default: std::max(std::thread::hardware_concurrency(), 1)
+     * @param max_thread_count thread pool size, min 1 and default: std::max(std::thread::hardware_concurrency(), 1)
      * @param max_queue_size max queue size, default: std::numeric_limits<std::size_t>::max()
      * @param wait_time wait time for BlockingQueue, default: 1ms
      */
-    explicit ThreadPool(size_t size = std::thread::hardware_concurrency(),
+    explicit ThreadPool(size_t max_thread_count = std::thread::hardware_concurrency(),
                         std::size_t max_queue_size = std::numeric_limits<std::size_t>::max(),
                         std::chrono::milliseconds wait_time = 1ms) :
-            _max_thread_count(std::max(size, static_cast<std::size_t>(1))),
+            _max_thread_count(std::max(max_thread_count, static_cast<std::size_t>(1))),
             _queue(max_queue_size, wait_time) {}
 
     /**
-     * Enqueues the task for thread pool and returns pair of future and status
+     * Enqueues the task sequentially for thread pool and returns pair of future and status
      * - ErrorCode is ErrorCode::NO_ERROR iff task was enqueued successfully
      * - Otherwise, the task will not be run and future.get() will throw std::future_error exception
      * @tparam Func: The type of task for the thread pool
@@ -57,13 +58,13 @@ public:
      */
     template<typename Func, typename... Args>
     auto add_task(Func &&func, Args &&... args) ->
-    std::enable_if_t<std::is_same_v<QueueType, SequentialQueueType>, TaskReturnType<Func, Args...>> {
+    std::enable_if_t<std::is_same_v<QueueType, SequentialQueue>, TaskReturnType<Func, Args...>> {
         auto lambda = [func, args...]() { return func(args...); };
         using return_type = std::invoke_result_t<Func, Args...>;
         auto task = std::packaged_task<return_type()>{lambda};
         auto future = task.get_future();
         auto status = _queue.push(
-                ElemType([moved_task = std::move(task)]() mutable { moved_task(); } // using c style casting
+                Elem([moved_task = std::move(task)]() mutable { moved_task(); } // using c style casting
                 )
         );
 
@@ -71,15 +72,29 @@ public:
         return std::pair<std::future<return_type>, ErrorCode>(std::move(future), status);
     }
 
+    /**
+     * Enqueues the task as per their priority for thread pool and returns pair of future and status
+     * - ErrorCode is ErrorCode::NO_ERROR iff task was enqueued successfully
+     * - Otherwise, the task will not be run and future.get() will throw std::future_error exception
+     * @tparam Func: The type of task for the thread pool
+     * @tparam Args: The type of arguments for the task
+     * @param priority: The priority of the task for the thread pool
+     * @param func: The task for the thread pool
+     * @param args: The arguments for the task
+     * @return std::pair<future, ErrorCode>
+     * - Future is to get the returned value from the task
+     * - ErrorCode is ErrorCode::NO_ERROR iff task was enqueued successfully
+     */
+
     template<typename Func, typename... Args>
     auto add_task(int priority, Func &&func, Args &&... args) ->
-    std::enable_if_t<std::is_same_v<QueueType, PriorityQueueType>, TaskReturnType<Func, Args...>> {
+    std::enable_if_t<std::is_same_v<QueueType, PriorityQueue>, TaskReturnType<Func, Args...>> {
         auto lambda = [func, args...]() { return func(args...); };
         using return_type = std::invoke_result_t<Func, Args...>;
         auto task = std::packaged_task<return_type()>{lambda};
         auto future = task.get_future();
         auto status = _queue.push(
-                PriorityElemType(priority, [moved_task = std::move(task)]() mutable { moved_task(); }
+                PriorityElem(priority, [moved_task = std::move(task)]() mutable { moved_task(); }
                 )
         );
 

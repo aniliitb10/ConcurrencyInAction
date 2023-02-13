@@ -15,18 +15,18 @@ TEST_F(TestThreadPool, SimpleTest) {
     EXPECT_EQ(thread_pool.get_thread_count(), 0);
     EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
 
-    thread_pool.add_task([]() {return 0; });
+    thread_pool.add_task([]() { return 0; });
     EXPECT_EQ(thread_pool.get_thread_count(), 1);
     EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
 
     // it is expected that either the new task will run on same thread, or one more thread might have been created
-    thread_pool.add_task([]() {return 0; });
+    thread_pool.add_task([]() { return 0; });
     EXPECT_LE(thread_pool.get_thread_count(), 2);
     EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
 
     // even if more tasks are added, it can't have more than @thread_pool_size threads
     for (int i = 0; i < 20; ++i)
-        thread_pool.add_task([i]() {return i; });
+        thread_pool.add_task([i]() { return i; });
 
     EXPECT_LE(thread_pool.get_thread_count(), thread_pool_size);
     EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
@@ -74,11 +74,10 @@ TEST_F(TestThreadPool, DifferentReturnTypeTest) {
     EXPECT_EQ(future_int2.first.get(), 10);
 }
 
-TEST_F(TestThreadPool, StopTest)
-{
+TEST_F(TestThreadPool, StopTest) {
     constexpr std::size_t max_thread_count{6};
-    constexpr std::size_t max_queue_size{ 2 * max_thread_count};
-    constexpr auto task_interval {100ms};
+    constexpr std::size_t max_queue_size{2 * max_thread_count};
+    constexpr auto task_interval{100ms};
 
     ThreadPool thread_pool{max_thread_count, max_queue_size};
 
@@ -91,8 +90,7 @@ TEST_F(TestThreadPool, StopTest)
 
     std::vector<std::future<int>> returned_nums{};
 
-    for (auto i : tasks)
-    {
+    for (auto i: tasks) {
         auto ret = thread_pool.add_task(get_slow_task(task_interval, i));
         returned_nums.emplace_back(std::move(ret.first));
         EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
@@ -105,7 +103,7 @@ TEST_F(TestThreadPool, StopTest)
     EXPECT_EQ(tasks.size() - max_thread_count, thread_pool.get_task_count());
 
     // Adding another task will not be successful as the queue should be full
-    EXPECT_EQ(ErrorCode::QUEUE_FULL, thread_pool.add_task([](){}).second);
+    EXPECT_EQ(ErrorCode::QUEUE_FULL, thread_pool.add_task([]() {}).second);
 
     // sleep for more than double the time consumed for each task to let threads finish
     std::this_thread::sleep_for(2 * task_interval + 50ms);
@@ -116,14 +114,13 @@ TEST_F(TestThreadPool, StopTest)
     EXPECT_TRUE(thread_pool.is_stopped());
 
     // Adding another task will not be successful as the queue is closed
-    EXPECT_EQ(ErrorCode::QUEUE_CLOSED, thread_pool.add_task([](){}).second);
+    EXPECT_EQ(ErrorCode::QUEUE_CLOSED, thread_pool.add_task([]() {}).second);
 }
 
-TEST_F(TestThreadPool, StopBeforeThreadsFinishTest)
-{
+TEST_F(TestThreadPool, StopBeforeThreadsFinishTest) {
     constexpr std::size_t max_thread_count{6};
-    constexpr std::size_t max_queue_size{ 2 * max_thread_count};
-    constexpr auto task_interval {100ms};
+    constexpr std::size_t max_queue_size{2 * max_thread_count};
+    constexpr auto task_interval{100ms};
 
     ThreadPool thread_pool{max_thread_count, max_queue_size};
     auto tasks = get_random_int_vec(max_thread_count + max_queue_size);
@@ -131,8 +128,7 @@ TEST_F(TestThreadPool, StopBeforeThreadsFinishTest)
 
     std::vector<std::future<int>> returned_nums{};
 
-    for (auto i : tasks)
-    {
+    for (auto i: tasks) {
         auto ret = thread_pool.add_task(get_slow_task(task_interval, i));
         returned_nums.emplace_back(std::move(ret.first));
         EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
@@ -145,7 +141,7 @@ TEST_F(TestThreadPool, StopBeforeThreadsFinishTest)
     EXPECT_EQ(tasks.size() - max_thread_count, thread_pool.get_task_count());
 
     // Adding another task will not be successful as the queue should be full
-    EXPECT_EQ(ErrorCode::QUEUE_FULL, thread_pool.add_task([](){}).second);
+    EXPECT_EQ(ErrorCode::QUEUE_FULL, thread_pool.add_task([]() {}).second);
 
     // let's try stopping, it joins the threads. Hence, all threads must have finished
     thread_pool.stop();
@@ -153,15 +149,15 @@ TEST_F(TestThreadPool, StopBeforeThreadsFinishTest)
     EXPECT_EQ(0, thread_pool.get_task_count());
 
     // Adding another task will not be successful as the queue is closed
-    EXPECT_EQ(ErrorCode::QUEUE_CLOSED, thread_pool.add_task([](){}).second);
+    EXPECT_EQ(ErrorCode::QUEUE_CLOSED, thread_pool.add_task([]() {}).second);
 }
 
 TEST_F(TestThreadPool, PriorityQueueBasicTest) {
     constexpr std::size_t max_thread_count{2};
     constexpr std::size_t max_queue_size{10};
-    constexpr auto task_interval {100ms};
+    constexpr auto task_interval{100ms};
 
-    ThreadPool<PriorityQueueType> thread_pool{max_thread_count, max_queue_size};
+    ThreadPool<PriorityQueue> thread_pool{max_thread_count, max_queue_size};
     EXPECT_EQ(max_queue_size, thread_pool.get_max_task_count());
     EXPECT_EQ(max_thread_count, thread_pool.get_max_thread_count());
 
@@ -177,8 +173,7 @@ TEST_F(TestThreadPool, PriorityQueueBasicTest) {
     // and then other tasks will be prioritized as per their priority
     std::vector<std::future<int>> returns{};
     const auto task_nums = get_vector({3, 3, 2, 1, 0, 4});
-    for (auto n : task_nums)
-    {
+    for (auto n: task_nums) {
         auto result = thread_pool.add_task(n, func, n);
         EXPECT_EQ(ErrorCode::NO_ERROR, result.second);
         returns.emplace_back(std::move(result.first));
@@ -186,7 +181,7 @@ TEST_F(TestThreadPool, PriorityQueueBasicTest) {
     EXPECT_EQ(4, thread_pool.get_task_count());
 
     std::vector<int> actual_result{};
-    for (auto&& r : returns) {
+    for (auto &&r: returns) {
         actual_result.push_back(r.get());
     }
 
@@ -204,4 +199,56 @@ TEST_F(TestThreadPool, PriorityQueueBasicTest) {
     }
     auto expected_order = get_vector({3, 3, 0, 1, 2, 4});
     EXPECT_EQ(expected_order, process_order);
+}
+
+TEST_F(TestThreadPool, PriorityQueueStressTest) {
+    constexpr std::size_t max_thread_count{4};
+    constexpr std::size_t max_queue_size{100};
+    constexpr auto task_interval{500ms};
+
+    // Get some random ints
+    const auto nums = get_random_int_vec(max_queue_size);
+
+    ThreadPool<PriorityQueue> thread_pool{max_thread_count, max_queue_size};
+    std::vector<std::future<int>> futures{};
+    futures.reserve(max_thread_count + max_queue_size);
+
+    // allocate another variable at the start to be used later,
+    // so that it doesn't interfere with task prioritization
+    std::vector<int> returned_nums{};
+    returned_nums.reserve(nums.size());
+
+    auto sorted_nums{nums};
+    std::sort(sorted_nums.begin(), sorted_nums.end());
+
+    // Occupy the threads, so that next tasks remain pending and have the opportunity to get prioritized
+    for (std::size_t i = 0; i < max_thread_count; ++i) {
+        auto task_future = thread_pool.add_task(1, get_slow_task(task_interval, static_cast<int>(i)));
+        EXPECT_EQ(ErrorCode::NO_ERROR, task_future.second);
+        futures.emplace_back(std::move(task_future.first));
+    }
+
+    BlockingQueue<int> thread_safe_queue{};
+    // Now add these tasks
+    for (auto num: nums) {
+        auto task_future = thread_pool.add_task(num,
+                                                [&thread_safe_queue, num]() {
+                                                    std::this_thread::sleep_for(10ms);
+                                                    thread_safe_queue.push(num);
+                                                    return num;
+                                                });
+        EXPECT_EQ(ErrorCode::NO_ERROR, task_future.second);
+        futures.emplace_back(std::move(task_future.first));
+    }
+
+    EXPECT_EQ(nums.size(), sorted_nums.size());
+    EXPECT_NE(nums, sorted_nums);
+
+    // get the order in which tasks were prioritized
+    for (std::size_t i = 0; i < nums.size(); ++i) {
+        returned_nums.push_back(thread_safe_queue.pop());
+    }
+
+    EXPECT_EQ(sorted_nums.size(), returned_nums.size());
+    EXPECT_EQ(sorted_nums, returned_nums);
 }

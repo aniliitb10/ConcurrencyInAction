@@ -1,15 +1,26 @@
 #include <gtest/gtest.h>
-#include <blocking_queue.h>
+#include <priority_wrapper.h>
 #include <functional>
 
 struct TestPriorityWrapper : public ::testing::Test {};
 
 TEST_F(TestPriorityWrapper, BasicTest){
 
-    PriorityWrapper<double, std::function<int()>> wrapper{0.1, []{return 1;}};
-    EXPECT_FLOAT_EQ(wrapper._priority, 0.1);
-    EXPECT_EQ(wrapper._task(), 1);
+    PriorityWrapper<std::function<int()>> wrapper1{2, []{return 1;}};
+    EXPECT_EQ(wrapper1._priority, 2);
+    EXPECT_EQ(wrapper1._task(), 1);
 
-    IntPriorityWrapper<std::function<double()>> int_wrapper{1, []{return 1.0;}};
-    EXPECT_EQ(int_wrapper._task(), 1.0);
+    PriorityWrapper<std::function<double()>> wrapper2{1, []{return 3.0;}};
+    EXPECT_FLOAT_EQ(wrapper2._task(), 3.0);
+    EXPECT_EQ(wrapper2._priority, 1);
+}
+
+TEST_F(TestPriorityWrapper, ComparisionTest) {
+    PriorityWrapper<std::function<int()>> wrapper1{2, []{return 1;}};
+    PriorityWrapper<std::function<int()>> wrapper2{1, []{return 1;}};
+    PriorityWrapper<std::function<int()>> wrapper3{1, []{return 3;}};
+
+    EXPECT_NE(wrapper2, wrapper1);
+    EXPECT_LT(wrapper2, wrapper1);
+    EXPECT_EQ(wrapper2, wrapper3);
 }

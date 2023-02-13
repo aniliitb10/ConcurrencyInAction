@@ -12,6 +12,28 @@
 
 using namespace std::chrono_literals;
 
+
+#define EXPECT_EXCEPTION( TRY_BLOCK, EXCEPTION_TYPE, MESSAGE )        \
+try                                                                   \
+{                                                                     \
+TRY_BLOCK;                                                            \
+FAIL() << "exception '" << MESSAGE << "' not thrown at all!";         \
+}                                                                     \
+catch( const EXCEPTION_TYPE& e )                                      \
+{                                                                     \
+EXPECT_EQ( std::string(MESSAGE), e.what() )                           \
+<< " exception message is incorrect. Expected the following "         \
+"message:\n\n"                                                        \
+<< MESSAGE << "\n";                                                   \
+}                                                                     \
+catch( ... )                                                          \
+{                                                                     \
+FAIL() << "exception '" << MESSAGE                                    \
+<< "' not thrown with expected type '" << #EXCEPTION_TYPE             \
+<< "'!";                                                              \
+}
+
+
 template <typename Itr>
 void print(Itr begin, Itr end, char sep = ' ', bool newline = true)
 {
@@ -58,7 +80,7 @@ struct is_iterable <T,
 > : std::true_type
 {};
 
-// an helper to use is_iterable
+// a helper to use is_iterable
 template <typename T>
 constexpr bool is_iterable_v = is_iterable<T>::value;
 

@@ -24,43 +24,12 @@ enum class ErrorCode : uint8_t
     QUEUE_CLOSED // Enqueuing failed as queue was closed
 };
 
-template <typename PriorityType, typename TaskType>
-struct PriorityWrapper {
-
-    template<class... Args >
-    explicit PriorityWrapper(PriorityType priority, Args&&... args) :
-    _priority(priority), _task(std::forward<Args>(args)...) {}
-
-    PriorityWrapper(PriorityWrapper&&)  noexcept = default;
-    PriorityWrapper& operator=(PriorityWrapper&&)  noexcept = default;
-
-    auto operator()() -> std::invoke_result_t<TaskType> {
-        return _task();
-    }
-
-    bool operator<(const PriorityWrapper &rhs) const noexcept{
-        return _priority < rhs._priority;
-    }
-
-    bool operator==(const PriorityWrapper &rhs) const noexcept{
-        return _priority == rhs._priority;
-    }
-
-    PriorityType _priority;
-    TaskType _task;
-};
-
-template <typename TaskType>
-using IntPriorityWrapper = PriorityWrapper<int, TaskType>;
-
 template <typename T,
           typename Container = std::queue<T>,
           typename = std::enable_if_t<std::is_move_constructible_v<T>>>
 class BlockingQueue
 {
 public:
-    using container_type = Container;
-
     /**
      * Constructor for BlockingQueue
      * @param max_size: maximum size of BlockingQueue, defaults to std::numeric_limits<std::size_t>::max()
@@ -147,7 +116,6 @@ public:
                 // extract is the only way to take a move-only object out of a set
                 // https://en.cppreference.com/w/cpp/container/multiset/extract
                 auto ptr = std::make_unique<T>(std::move(_queue.extract(itr).value()));
-                //_queue.erase(itr);
                 return std::pair<std::unique_ptr<T>, bool>(std::move(ptr), _closed);
             }
         }

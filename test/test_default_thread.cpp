@@ -2,7 +2,7 @@
 #include <default_thread.h>
 #include <exception>
 #include <thread>
-#include "test_util.h"
+#include "util.h"
 
 //std::size_t terminate_counter{0};
 
