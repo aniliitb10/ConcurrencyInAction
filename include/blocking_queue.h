@@ -31,7 +31,7 @@ public:
     /**
      * Constructor for BlockingQueue
      * @param max_size: maximum size of BlockingQueue, defaults to std::numeric_limits<std::size_t>::max()
-     * @param wait_time: milliseconds to wait_for during try_pop from the queue, defaults to 0
+     * @param wait_time: milliseconds to wait_for during try_pop from the queue, defaults to 1 ms
      */
     explicit BlockingQueue(std::size_t max_size = std::numeric_limits<std::size_t>::max(),
                            std::chrono::milliseconds wait_time = 0ms) :
@@ -53,13 +53,13 @@ public:
             if (auto code = unsafe_check_if_insertable(); code != ErrorCode::NO_ERROR) return code;
             _queue.emplace(std::forward<Args>(args)...);
         }
-        _condition_variable.notify_one();
+        _condition_variable.notify_all();
         return ErrorCode::NO_ERROR;
     }
 
     /**
      * Waits for en element to be there in the queue
-     * No timeout, waits forever.
+     * No timeout, waits forever (actually just 24 Hr, to be precise, check @try_pop_for).
      * @note: this will keep waiting even if queue has been closed
      * - reason: as the return type is TaskType and not std::unique_ptr<TaskType>,
      *           there is no default value (at least, not for every type) to return when the queue is closed
@@ -124,7 +124,8 @@ public:
      * - pair.second returns true if queue has been closed
      */
     [[nodiscard]] std::pair<std::unique_ptr<T>, bool> try_pop() noexcept {
-        return try_pop_for(_wait_time);
+        auto wait_time_milli_s = is_closed() ? 0ms : _wait_time;
+        return try_pop_for(wait_time_milli_s);
     }
 
     /**
@@ -151,6 +152,11 @@ public:
     [[nodiscard]] std::size_t size() const noexcept {
         std::lock_guard lock_guard(mutex);
         return _queue.size();
+    }
+
+    /* To check if the queue is empty */
+    [[nodiscard]] bool is_empty() const noexcept {
+        return this->size() == 0;
     }
 
     [[nodiscard]] std::size_t get_max_size() const noexcept {

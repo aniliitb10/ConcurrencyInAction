@@ -54,6 +54,10 @@ public:
         return _thread.joinable();
     }
 
+    void join() {
+        return _thread.join();
+    }
+
     [[nodiscard]] Action get_action() const noexcept {
         return _action;
     }

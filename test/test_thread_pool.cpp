@@ -12,24 +12,22 @@ struct TestThreadPool : public ::testing::Test {
 TEST_F(TestThreadPool, SimpleTest) {
     constexpr std::size_t thread_pool_size{2};
     ThreadPool thread_pool{thread_pool_size};
-    EXPECT_EQ(thread_pool.get_thread_count(), 0);
-    EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
+    EXPECT_EQ(thread_pool.get_thread_count(), thread_pool_size);
 
     thread_pool.add_task([]() { return 0; });
-    EXPECT_EQ(thread_pool.get_thread_count(), 1);
-    EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
+    EXPECT_EQ(thread_pool.get_thread_count(), thread_pool_size);
 
     // it is expected that either the new task will run on same thread, or one more thread might have been created
     thread_pool.add_task([]() { return 0; });
     EXPECT_LE(thread_pool.get_thread_count(), 2);
-    EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
+    EXPECT_EQ(thread_pool.get_thread_count(), thread_pool_size);
 
     // even if more tasks are added, it can't have more than @thread_pool_size threads
     for (int i = 0; i < 20; ++i)
         thread_pool.add_task([i]() { return i; });
 
     EXPECT_LE(thread_pool.get_thread_count(), thread_pool_size);
-    EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
+    EXPECT_EQ(thread_pool.get_thread_count(), thread_pool_size);
 }
 
 TEST_F(TestThreadPool, TestWithMultipleTasks) {
@@ -39,8 +37,7 @@ TEST_F(TestThreadPool, TestWithMultipleTasks) {
 
     std::vector<std::future<int>> futures{};
     ThreadPool thread_pool{thread_pool_size};
-    EXPECT_EQ(thread_pool.get_thread_count(), 0);
-    EXPECT_EQ(thread_pool.get_max_thread_count(), thread_pool_size);
+    EXPECT_EQ(thread_pool.get_thread_count(), thread_pool_size);
 
     futures.reserve(nums.size());
     for (auto num: nums) {
@@ -68,7 +65,7 @@ TEST_F(TestThreadPool, DifferentReturnTypeTest) {
     auto future_int = thread_pool.add_task([]() { return 0; });
     auto future_int2 = thread_pool.add_task([](int num) { return num * 2; }, 5);
 
-    // thread_pool.stop();
+    // _thread_pool.stop();
     EXPECT_EQ(future_hello.first.get(), "hello");
     EXPECT_EQ(future_int.first.get(), 0);
     EXPECT_EQ(future_int2.first.get(), 10);
@@ -81,8 +78,7 @@ TEST_F(TestThreadPool, StopTest) {
 
     ThreadPool thread_pool{max_thread_count, max_queue_size};
 
-    EXPECT_EQ(0, thread_pool.get_thread_count());
-    EXPECT_EQ(max_thread_count, thread_pool.get_max_thread_count());
+    EXPECT_EQ(max_thread_count, thread_pool.get_thread_count());
     EXPECT_EQ(max_queue_size, thread_pool.get_max_task_count());
 
     auto tasks = get_random_int_vec(max_thread_count + max_queue_size);
@@ -90,14 +86,22 @@ TEST_F(TestThreadPool, StopTest) {
 
     std::vector<std::future<int>> returned_nums{};
 
-    for (auto i: tasks) {
-        auto ret = thread_pool.add_task(get_slow_task(task_interval, i));
+    for (std::size_t i = 0; i < max_thread_count; ++i) {
+        auto ret = thread_pool.add_task(get_slow_task(task_interval, tasks[i]));
         returned_nums.emplace_back(std::move(ret.first));
         EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
     }
 
-    // This should be enough to create all @max_thread_count threads
-    EXPECT_EQ(max_thread_count, thread_pool.get_thread_count());
+    // soon these should be consumed by threadpool
+    std::this_thread::sleep_for(5ms);
+    EXPECT_EQ(0, thread_pool.get_task_count());
+
+    // Add the remaining items
+    for (std::size_t i = max_thread_count; i < tasks.size(); ++i) {
+        auto ret = thread_pool.add_task(get_slow_task(task_interval, tasks[i]));
+        returned_nums.emplace_back(std::move(ret.first));
+        EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
+    }
 
     // Each thread has one task to complete, remaining tasks must still be in queue
     EXPECT_EQ(tasks.size() - max_thread_count, thread_pool.get_task_count());
@@ -128,14 +132,22 @@ TEST_F(TestThreadPool, StopBeforeThreadsFinishTest) {
 
     std::vector<std::future<int>> returned_nums{};
 
-    for (auto i: tasks) {
-        auto ret = thread_pool.add_task(get_slow_task(task_interval, i));
+    for (std::size_t i = 0; i < max_thread_count; ++i) {
+        auto ret = thread_pool.add_task(get_slow_task(task_interval, tasks[i]));
         returned_nums.emplace_back(std::move(ret.first));
         EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
     }
 
-    // This should be enough to create all @max_thread_count threads
-    EXPECT_EQ(max_thread_count, thread_pool.get_thread_count());
+    // soon these should be consumed by threadpool
+    std::this_thread::sleep_for(5ms);
+    EXPECT_EQ(0, thread_pool.get_task_count());
+
+    // Add the remaining items
+    for (std::size_t i = max_thread_count; i < tasks.size(); ++i) {
+        auto ret = thread_pool.add_task(get_slow_task(task_interval, tasks[i]));
+        returned_nums.emplace_back(std::move(ret.first));
+        EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
+    }
 
     // Each thread has one task to complete, remaining tasks must still be in queue
     EXPECT_EQ(tasks.size() - max_thread_count, thread_pool.get_task_count());
@@ -153,30 +165,42 @@ TEST_F(TestThreadPool, StopBeforeThreadsFinishTest) {
 }
 
 TEST_F(TestThreadPool, PriorityQueueBasicTest) {
-    constexpr std::size_t max_thread_count{2};
+    // for testing of priority, if there are more than 1 threads, then even if, items will be enqueued in order,
+    // and picked in order, there will be no guarantee that they will be processed / returned in same order
+    constexpr std::size_t max_thread_count{1};
     constexpr std::size_t max_queue_size{10};
-    constexpr auto task_interval{100ms};
 
     ThreadPool<PriorityQueue> thread_pool{max_thread_count, max_queue_size};
     EXPECT_EQ(max_queue_size, thread_pool.get_max_task_count());
-    EXPECT_EQ(max_thread_count, thread_pool.get_max_thread_count());
+    EXPECT_EQ(max_thread_count, thread_pool.get_thread_count());
 
     // using BlockingQueue to store the returned values as it is also thread safe
     BlockingQueue<int> thread_safe_queue{};
-    auto func = [&thread_safe_queue, task_interval](int num) {
-        std::this_thread::sleep_for(task_interval);
+    auto func = [&thread_safe_queue](int num) {
         thread_safe_queue.push(num);
+        std::this_thread::sleep_for(num == 3 ? 20ms : 0ms); // in milliseconds
         return num;
     };
 
-    // as the thread count is 2, first 2 threads will keep the threads occupied
+    // let's keep the first @max_thread_count threads occupied
     // and then other tasks will be prioritized as per their priority
     std::vector<std::future<int>> returns{};
-    const auto task_nums = get_vector({3, 3, 2, 1, 0, 4});
-    for (auto n: task_nums) {
-        auto result = thread_pool.add_task(n, func, n);
-        EXPECT_EQ(ErrorCode::NO_ERROR, result.second);
-        returns.emplace_back(std::move(result.first));
+    const auto task_nums = get_vector({3, 2, 1, 0, 4});
+    for (std::size_t i = 0; i < max_thread_count; ++i) {
+        auto ret = thread_pool.add_task(task_nums[i], func, task_nums[i]);
+        returns.emplace_back(std::move(ret.first));
+        EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
+    }
+
+    // soon these should be consumed by threadpool
+    std::this_thread::sleep_for(5ms);
+    EXPECT_EQ(0, thread_pool.get_task_count());
+
+    // Add the remaining items
+    for (std::size_t i = max_thread_count; i < task_nums.size(); ++i) {
+        auto ret = thread_pool.add_task(task_nums[i], func, task_nums[i]);
+        returns.emplace_back(std::move(ret.first));
+        EXPECT_EQ(ErrorCode::NO_ERROR, ret.second);
     }
     EXPECT_EQ(4, thread_pool.get_task_count());
 
@@ -197,14 +221,16 @@ TEST_F(TestThreadPool, PriorityQueueBasicTest) {
     for (std::size_t i = 0; i < task_nums.size(); ++i) {
         process_order.push_back(thread_safe_queue.pop());
     }
-    auto expected_order = get_vector({3, 3, 0, 1, 2, 4});
+    auto expected_order = get_vector({3, 0, 1, 2, 4});
     EXPECT_EQ(expected_order, process_order);
 }
 
 TEST_F(TestThreadPool, PriorityQueueStressTest) {
-    constexpr std::size_t max_thread_count{4};
-    constexpr std::size_t max_queue_size{50};
-    constexpr auto task_interval{500ms};
+    // for testing of priority, if there are more than 1 threads, then even if, items will be enqueued in order,
+    // and picked in order, there will be no guarantee that they will be processed / returned in same order
+    constexpr std::size_t max_thread_count{1};
+    constexpr std::size_t max_queue_size{1000};
+    constexpr auto task_interval{10ms};
 
     // Get some random ints
     const auto nums = get_random_int_vec(max_queue_size);
@@ -228,18 +254,23 @@ TEST_F(TestThreadPool, PriorityQueueStressTest) {
         futures.emplace_back(std::move(task_future.first));
     }
 
+    // allow some buffer time for all threads to be occupied
+    std::this_thread::sleep_for(5ms);
+    EXPECT_EQ(0, thread_pool.get_task_count());
+
     BlockingQueue<int> thread_safe_queue{};
     // Now add these tasks
     for (auto num: nums) {
         auto task_future = thread_pool.add_task(num,
                                                 [&thread_safe_queue, num]() {
-                                                    std::this_thread::sleep_for(10ms);
                                                     thread_safe_queue.push(num);
+                                                    std::this_thread::sleep_for(0ms);
                                                     return num;
                                                 });
         EXPECT_EQ(ErrorCode::NO_ERROR, task_future.second);
         futures.emplace_back(std::move(task_future.first));
     }
+    EXPECT_EQ(nums.size(), thread_pool.get_task_count());
 
     EXPECT_EQ(nums.size(), sorted_nums.size());
     EXPECT_NE(nums, sorted_nums);
