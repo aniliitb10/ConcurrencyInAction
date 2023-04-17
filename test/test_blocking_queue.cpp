@@ -1,5 +1,4 @@
 #include <blocking_queue.h>
-#include <default_thread.h>
 #include <priority_wrapper.h>
 #include <gtest/gtest.h>
 #include <future>
@@ -56,7 +55,7 @@ TEST_F(BlockingQueueTest, SimplePushPopTest) {
     const int thread_count{10};
     const int variable_count{1000};
 
-    std::vector<DefaultThread> producers{};
+    std::vector<std::jthread> producers{};
     producers.reserve(thread_count);
 
     for (int i = 0; i < thread_count; ++i) {
@@ -67,11 +66,11 @@ TEST_F(BlockingQueueTest, SimplePushPopTest) {
         });
     }
 
-    for (auto &thread: producers) thread.get_thread().join();
+    for (auto &thread: producers) thread.join();
     EXPECT_EQ(thread_count * variable_count, queue.size());
 
     // now popping begins
-    std::vector<DefaultThread> consumers{};
+    std::vector<std::jthread> consumers{};
     consumers.reserve(thread_count);
 
     for (int i = 0; i < thread_count; ++i) {
@@ -82,7 +81,7 @@ TEST_F(BlockingQueueTest, SimplePushPopTest) {
             }
         });
     }
-    for (auto &thread: consumers) thread.get_thread().join();
+    for (auto &thread: consumers) thread.join();
     EXPECT_EQ(0, queue.size());
 }
 
@@ -90,7 +89,7 @@ TEST_F(BlockingQueueTest, BlockingTest) {
     using namespace std::chrono_literals;
     using queue_type = BlockingQueue<int>;
     queue_type queue{};
-    DefaultThread producer
+    std::jthread producer
             {
                     [&queue]() {
                         EXPECT_EQ(queue.push(0), ErrorCode::NO_ERROR);
@@ -100,7 +99,7 @@ TEST_F(BlockingQueueTest, BlockingTest) {
                     }
             };
 
-    DefaultThread consumer
+    std::jthread consumer
             {
                     [&queue]() {
                         // allow some buffer time to get items on the queue
@@ -137,14 +136,14 @@ TEST_F(BlockingQueueTest, WithMoveOnlyTypes) {
     const std::string sample_string{"sample_string"};
     using queue_type = BlockingQueue<StrWrapperMoveOnly>;
     queue_type queue{};
-    DefaultThread consumer{[&queue, &sample_string] {
+    std::jthread consumer{[&queue, &sample_string] {
         auto received_string = queue.pop();
         EXPECT_EQ(received_string.get(), sample_string);
     }};
 
     // this will go out of scope (joined) in next line
     // so, no need to limit its scope for quick evaluation
-    DefaultThread producer{[&sample_string, &queue]() {
+    std::jthread producer{[&sample_string, &queue]() {
         EXPECT_EQ(queue.push(sample_string), ErrorCode::NO_ERROR);
     }};
 }

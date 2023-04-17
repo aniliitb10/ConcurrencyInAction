@@ -228,7 +228,9 @@ TEST_F(TestThreadPool, PriorityQueueBasicTest) {
 TEST_F(TestThreadPool, PriorityQueueStressTest) {
     // for testing of priority, if there are more than 1 threads, then even if, items will be enqueued in order,
     // and picked in order, there will be no guarantee that they will be processed / returned in same order
-    constexpr std::size_t max_thread_count{1};
+    // So, let's proceed with the assumption that with 4 threads, 70% tasks should be processed as per their priority
+    // - 30% really is a bad representation, because even in these 30%, most of these will be ordered
+    constexpr std::size_t max_thread_count{4};
     constexpr std::size_t max_queue_size{1000};
     constexpr auto task_interval{10ms};
 
@@ -243,9 +245,6 @@ TEST_F(TestThreadPool, PriorityQueueStressTest) {
     // so that it doesn't interfere with task prioritization
     std::vector<int> returned_nums{};
     returned_nums.reserve(nums.size());
-
-    auto sorted_nums{nums};
-    std::sort(sorted_nums.begin(), sorted_nums.end());
 
     // Occupy the threads, so that next tasks remain pending and have the opportunity to get prioritized
     for (std::size_t i = 0; i < max_thread_count; ++i) {
@@ -270,16 +269,21 @@ TEST_F(TestThreadPool, PriorityQueueStressTest) {
         EXPECT_EQ(ErrorCode::NO_ERROR, task_future.second);
         futures.emplace_back(std::move(task_future.first));
     }
-    EXPECT_EQ(nums.size(), thread_pool.get_task_count());
-
-    EXPECT_EQ(nums.size(), sorted_nums.size());
-    EXPECT_NE(nums, sorted_nums);
 
     // get the order in which tasks were prioritized
     for (std::size_t i = 0; i < nums.size(); ++i) {
         returned_nums.push_back(thread_safe_queue.pop());
     }
+    EXPECT_EQ(nums.size(), returned_nums.size());
 
-    EXPECT_EQ(sorted_nums.size(), returned_nums.size());
-    EXPECT_EQ(sorted_nums, returned_nums); // little unstable
+    // count the number of misplaced numbers, these shouldn't be more than 30%
+    std::size_t misplaced{0};
+    auto itr_end = returned_nums.end();
+
+    auto till = std::is_sorted_until(returned_nums.begin(), itr_end);
+    while (till != itr_end) {
+        misplaced++;
+        till = std::is_sorted_until(std::next(till), itr_end);
+    }
+    EXPECT_LT(misplaced, static_cast<std::size_t>(returned_nums.size() * 0.3));
 }

@@ -23,6 +23,19 @@ enum class ErrorCode : uint8_t {
     QUEUE_CLOSED // Enqueuing failed as queue was closed
 };
 
+/**
+ * A @std::condition_variable based BlockingQueue to hold a task in queue and supports following methods:
+ * - @push: to push an item (task) on the queue
+ * - @pop: waits for @std::chrono::milliseconds::max() for an element to be on queue to pop, otherwise throws @std::runtime_error
+ * - @try_pop_for: Waits for a user specified time interval for an element to be on queue and returns a pair:
+                   - pair.first is a unique pointer containing the item, otherwise nullptr if there was nothing in the queue
+                   - pair.second returns true if queue has been closed, otherwise false
+ * - @try_pop: like @try_pop_for, only difference is that it tries for @_wait_time milliseconds (set in constructor)
+
+ * @tparam T: type of tasks, can be either executables or executables wrapped inside @PriorityWrapper to add priority
+ * @tparam Container: @std::queue<T> or @std::multiset<T>, not any other container. This is enforced in constructor
+ *                  - @std::multiset<T> is supported in case item has a priority (e.g. wrapped inside @PriorityWrapper)
+ */
 template<typename T,
         typename Container = std::queue<T>,
         typename = std::enable_if_t<std::is_move_constructible_v<T>>>
@@ -65,7 +78,7 @@ public:
      *           there is no default value (at least, not for every type) to return when the queue is closed
      * @return the element at the front of the queue
      */
-    [[nodiscard]] T pop() {
+    [[nodiscard]] T pop() noexcept(false) {
         auto elem = std::move(try_pop_for(std::chrono::milliseconds::max()).first);
         if (!elem) {
             throw std::runtime_error("Timed out waiting for task");

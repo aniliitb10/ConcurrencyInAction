@@ -10,16 +10,7 @@
 
 using namespace std::chrono_literals;
 
-/**
- *  A thread pool to manage a group of threads to execute tasks
- *  It uses @BlockingQueue to store and extract tasks
- *
- *  Threadpool permits concurrent invocation of @add_task member methods and other helper methods
- *  - except @stop and @stop_early
- *  - methods which permit concurrent invocation have been annotated with @thread_safe
- */
-
-// Following are some aliases to avoid boilerplate code
+// Following are some aliases to avoid boilerplate code withing functions
 using Elem = std::packaged_task<void()>;
 using SequentialQueue = BlockingQueue<Elem>;
 
@@ -28,6 +19,17 @@ using PriorityQueue = BlockingQueue<PriorityElem, std::multiset<PriorityElem>>;
 
 template <typename Func, typename... Args>
 using TaskReturnType = std::pair<std::future<std::invoke_result_t<Func, Args&&...>>, ErrorCode>;
+
+/**
+ *  A thread pool to manage a group of threads to execute tasks
+ *  It expects a template parameter for the underlying container to store tasks
+ *  - By default, it uses @BlockingQueue to store and extract tasks
+ *  - Otherwise, @PriorityQueue is another candidate for underlying queue
+ *
+ *  Threadpool permits concurrent invocation of @add_task member methods and other helper methods
+ *  - except @stop and @stop_early
+ *  - methods which permit concurrent invocation have been annotated with @thread_safe
+ */
 
 template <typename QueueType = SequentialQueue>
 class ThreadPool {

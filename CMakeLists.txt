@@ -8,4 +8,4 @@ include_directories(include)
 file(GLOB test "test/*.cpp")
 
 add_executable(Concurrency main.cpp ${test})
-target_link_libraries(Concurrency fmt gtest pthread)  # why does the order matter? pthread then gtest fails to compile
+target_link_libraries(Concurrency gtest pthread)  # why does the order matter? pthread then gtest fails to compile

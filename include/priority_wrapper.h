@@ -1,8 +1,8 @@
 #include <functional>
 
 /*
- * To wrap a task with some priority
- * Lower the number, higher the priority
+ * To wrap a task with some priority, to make a trivial task a prioritized one
+ * - Lower the number, higher the priority
  * An object of the class will be callable and will have same effect as calling task().
  * */
 template<typename TaskType>
