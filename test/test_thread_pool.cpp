@@ -177,7 +177,7 @@ TEST_F(TestThreadPool, PriorityQueueBasicTest) {
     // using BlockingQueue to store the returned values as it is also thread safe
     BlockingQueue<int> thread_safe_queue{};
     auto func = [&thread_safe_queue](int num) {
-        thread_safe_queue.push(num);
+        EXPECT_EQ(thread_safe_queue.push(num), ErrorCode::NO_ERROR);
         std::this_thread::sleep_for(num == 3 ? 20ms : 0ms); // in milliseconds
         return num;
     };
@@ -262,7 +262,7 @@ TEST_F(TestThreadPool, PriorityQueueStressTest) {
     for (auto num: nums) {
         auto task_future = thread_pool.add_task(num,
                                                 [&thread_safe_queue, num]() {
-                                                    thread_safe_queue.push(num);
+                                                    EXPECT_EQ(thread_safe_queue.push(num), ErrorCode::NO_ERROR);
                                                     std::this_thread::sleep_for(0ms);
                                                     return num;
                                                 });

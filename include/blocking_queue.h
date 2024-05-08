@@ -57,16 +57,16 @@ public:
     /**
      * To insert an element (constructed using args) in the queue
      * @param elem: element to insert
-     * @return true if insertion was successful
+     * @return ErrorCode::NO_ERROR if insertion was successful, else relevant error code
      */
     template<class... Args>
     [[nodiscard]] auto push(Args &&... args) -> std::enable_if_t<std::is_constructible_v<T, Args && ...>, ErrorCode> {
         {
             std::lock_guard lock_guard(mutex);
-            if (auto code = unsafe_check_if_insertable(); code != ErrorCode::NO_ERROR) return code;
+            if (const auto code = unsafe_check_if_insertable(); code != ErrorCode::NO_ERROR) return code;
             _queue.emplace(std::forward<Args>(args)...);
         }
-        _condition_variable.notify_all();
+        _condition_variable.notify_one();
         return ErrorCode::NO_ERROR;
     }
 
@@ -149,7 +149,7 @@ public:
     void close() noexcept {
         // this closes the queue for any push operations
         // but pop is still allowed
-        std::lock_guard lock(mutex);
+        std::lock_guard lock{mutex};
         _closed = true;
     }
 
@@ -157,7 +157,7 @@ public:
     [[nodiscard]] bool is_closed() const noexcept {
         // if it is closed then any waiting thread should stop waiting
         // (and this is the right time to call join() on them)
-        std::lock_guard lock(mutex);
+        std::lock_guard lock{mutex};
         return _closed;
     }
 

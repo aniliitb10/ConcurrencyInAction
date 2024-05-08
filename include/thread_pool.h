@@ -27,7 +27,7 @@ using TaskReturnType = std::pair<std::future<std::invoke_result_t<Func, Args&&..
  *  - Otherwise, @PriorityQueue is another candidate for underlying queue
  *
  *  Threadpool permits concurrent invocation of @add_task member methods and other helper methods
- *  - except @stop and @stop_early
+ *  - except @stop
  *  - methods which permit concurrent invocation have been annotated with @thread_safe
  */
 
@@ -140,27 +140,6 @@ public:
         return _queue.is_closed();
     }
 
-    /* This should be called only from any one thread (NOT @thread_safe)
-     * It is just another way to stop the threadpool, BUT:
-     * - This is to be used only when user knows that once queue becomes empty,
-     *   then no more items will be enqueued
-     * - This doesn't mean that no more items can be enqueued after calling this method, this just means
-     *   that even after further enqueuing, if queue becomes empty once, then threads will stop processing
-     * - However, to handle the edge case, when few items are added even after stopping threads and closing the queue,
-     *   the reference to current queue is returned, so that user can deal with it separately (e.g. in a single thread)
-     * - This function should be helpful when user wants to use the thread pool to deal with a bunch of tasks quickly
-     *   and be done with the threadpool (and has no intention to run the threadpool for, let's say, entire day)
-     * */
-    [[nodiscard]] QueueType& stop_early() {
-        _stop_early = true;
-        for (auto& thread: _threads) {
-            if (thread.joinable()) thread.join();
-        }
-
-        _queue.close();
-        return _queue;
-    }
-
     virtual ~ThreadPool() {
         stop();
     }
@@ -176,8 +155,8 @@ private:
         while (true) {
             if (auto [task_ptr, closed] = _queue.try_pop(); task_ptr) {
                 (*task_ptr)();
-            } else if (closed || _stop_early) {
-                break; // break the while loop, so that the thread is now joinable
+            } else if (closed) {  // no more items on the queue (as task_ptr is nullptr) and queue is closed, hence done
+                break; // break the infinite loop, so that the thread is now joinable
             } else {
                 std::this_thread::yield(); // allow other threads to run
             }
@@ -188,6 +167,5 @@ private:
     // The only member variable which is accessed via multiple threads is QueueType, and it is thread-safe
     const std::size_t _thread_count;
     QueueType _queue;
-    std::atomic_bool _stop_early{false};
     std::vector<std::jthread> _threads{};
 };

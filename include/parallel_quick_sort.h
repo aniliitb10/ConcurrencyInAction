@@ -1,3 +1,5 @@
+#pragma once
+
 #include <thread_pool.h>
 #include <algorithm>
 
@@ -34,15 +36,7 @@ void ParallelQuickSort::sort(ForwardIt first, ForwardIt last, std::size_t thread
 
     ParallelQuickSort parallel_quick_sort{thread_count};
     parallel_quick_sort.sort_impl(first, last);
-    auto& queue = parallel_quick_sort._thread_pool.stop_early();
-
-    if (!queue.is_empty()) {
-        std::cerr << "There are " << queue.size() << " items left on the queue, executing on main thread!\n";
-        do {
-            (*(queue.try_pop().first))();
-        }
-        while (!queue.is_empty());
-    }
+    parallel_quick_sort._thread_pool.stop_early();
 }
 
 ParallelQuickSort::ParallelQuickSort(size_t thread_count) : _thread_pool{
@@ -56,7 +50,7 @@ void ParallelQuickSort::sort_impl(ForwardIt first, ForwardIt last) {
 
     auto pivot = *(std::next(first, std::distance(first, last) / 2));
     auto med1 = std::partition(first, last, [pivot](const auto& elem) { return elem < pivot; });
-    auto med2 = std::partition(med1, last, [pivot](const auto& elem) { return !(pivot < elem); }); // only depend on '<'
+    auto med2 = std::partition(med1, last, [pivot](const auto& elem) { return pivot >= elem; }); // only depend on '<'
     sort_impl(first, med1);
     _thread_pool.add_task(&ParallelQuickSort::sort_impl<ForwardIt>, this, med2, last);
 }
