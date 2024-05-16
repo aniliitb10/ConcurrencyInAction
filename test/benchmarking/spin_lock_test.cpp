@@ -3,6 +3,7 @@
 #include <vector>
 #include <mutex>
 #include <benchmark/benchmark.h>
+#include <thread_pool.h>
 
 
 template<typename Lockable=SpinLock>
@@ -10,30 +11,6 @@ static void increment(Lockable &lockable, std::int64_t &num, std::int64_t by = 1
     std::scoped_lock lock(lockable);
     num += by;
 }
-
-template<class Lockable>
-static void simple_test() {
-    Lockable lock{};
-    std::vector<std::jthread> threads{};
-    const std::int64_t thread_count{10};
-    const std::int64_t task_count{100000};
-    std::int64_t reference_num{0};
-
-    for (int i = 0; i < thread_count; ++i) {
-        threads.emplace_back(
-                [&lock, &reference_num]() {
-                    for (int i = 0; i < task_count; ++i) {
-                        increment(lock, reference_num);
-                    }
-                }
-        );
-    }
-
-    for (auto &&thread: threads) {
-        if (thread.joinable()) thread.join();
-    }
-}
-
 
 // just for the sake of benchmarking, with memory_order_seq_cst
 class DefaultSpinLock {
@@ -55,19 +32,55 @@ struct LockingBenchMark : public benchmark::Fixture {
 };
 
 BENCHMARK_F(LockingBenchMark, SimpleLock)(benchmark::State &state) {
+    const std::int64_t thread_count{2};
+    const std::int64_t task_count{1'000'000};
+    SpinLock lock{};
+    std::int64_t reference_num{0};
+
+
+    ThreadPool<> thread_pool{thread_count, std::numeric_limits<std::size_t>::max(), 0ms, false};
+    for (int i = 0; i < task_count; ++i) {
+        thread_pool.add_task([&lock, &reference_num]() { increment(lock, reference_num); });
+    }
+
     for (auto _: state) {
-        simple_test<SpinLock>();
+        thread_pool.start();
+        thread_pool.stop();
     }
 }
 
 BENCHMARK_F(LockingBenchMark, DefaultSpinLock)(benchmark::State &state) {
+    const std::int64_t thread_count{2};
+    const std::int64_t task_count{1'000'000};
+    DefaultSpinLock lock{};
+    std::int64_t reference_num{0};
+
+
+    ThreadPool<> thread_pool{thread_count, std::numeric_limits<std::size_t>::max(), 0ms, false};
+    for (int i = 0; i < task_count; ++i) {
+        thread_pool.add_task([&lock, &reference_num]() { increment(lock, reference_num); });
+    }
+
     for (auto _: state) {
-        simple_test<DefaultSpinLock>();
+        thread_pool.start();
+        thread_pool.stop();
     }
 }
 
 BENCHMARK_F(LockingBenchMark, Mutex)(benchmark::State &state) {
+    const std::int64_t thread_count{2};
+    const std::int64_t task_count{1'000'000};
+    std::mutex lock{};
+    std::int64_t reference_num{0};
+
+
+    ThreadPool<> thread_pool{thread_count, std::numeric_limits<std::size_t>::max(), 0ms, false};
+    for (int i = 0; i < task_count; ++i) {
+        thread_pool.add_task([&lock, &reference_num]() { increment(lock, reference_num); });
+    }
+
     for (auto _: state) {
-        simple_test<std::mutex>();
+        thread_pool.start();
+        thread_pool.stop();
     }
 }

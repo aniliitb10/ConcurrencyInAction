@@ -42,12 +42,34 @@ public:
      */
     explicit ThreadPool(size_t thread_count = std::thread::hardware_concurrency(),
                         std::size_t max_queue_size = std::numeric_limits<std::size_t>::max(),
-                        std::chrono::milliseconds wait_time = 0ms) :
+                        std::chrono::milliseconds wait_time = 0ms, bool start = true) :
             _thread_count(thread_count == 0 ? static_cast<std::size_t>(1) : thread_count),
-            _queue(max_queue_size, wait_time) {
+            _queue(max_queue_size, wait_time),
+            _auto_start(start),
+            _promise(),
+            _shared_future(_promise.get_future().share()){
+
         for (std::size_t i = 0; i < thread_count; i++) {
-            _threads.emplace_back(&ThreadPool<QueueType>::worker_thread, this);
+            _threads.emplace_back(&ThreadPool<QueueType>::worker_thread, this, _shared_future);
         }
+
+        if (_auto_start) {
+            _promise.set_value();
+        }
+    }
+
+    // NOT @thread_safe
+    bool start() {
+        /* This functions starts the threadpool if it hasn't already started
+        // return true if the call started the threadpool
+        // otherwise false
+        */
+        if (!_auto_start && _shared_future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            _promise.set_value();
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -150,7 +172,9 @@ private:
      * This function is run by newly launched thread
      * Runs continuously unless the queue is closed
      * */
-    void worker_thread() {
+    void worker_thread(std::shared_future<void> shared_future) {
+        shared_future.wait(); // wait until promise is set
+
         // its only job is to get the task and execute it, continuously, hence in a while loop
         while (true) {
             if (auto [task_ptr, closed] = _queue.try_pop(); task_ptr) {
@@ -168,4 +192,7 @@ private:
     const std::size_t _thread_count;
     QueueType _queue;
     std::vector<std::jthread> _threads{};
+    const bool _auto_start;
+    std::promise<void> _promise{};
+    std::shared_future<void> _shared_future;
 };

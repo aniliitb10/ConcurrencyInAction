@@ -287,3 +287,20 @@ TEST_F(TestThreadPool, PriorityQueueStressTest) {
     }
     EXPECT_LT(misplaced, static_cast<std::size_t>(returned_nums.size() * 0.3));
 }
+
+TEST_F(TestThreadPool, WaitTest) {
+    ThreadPool<> thread_pool{4, std::numeric_limits<std::size_t>::max(), 0ms, false};
+    constexpr int task_count{10'000};
+    for (int i =0; i < task_count; ++i) {
+        thread_pool.add_task([i](){return i;});
+    }
+
+    // even after some wait, no task would be consumed
+    std::this_thread::sleep_for(1s);
+    EXPECT_EQ(task_count, thread_pool.get_task_count());
+
+    // now after starting, it must start consuming
+    EXPECT_TRUE(thread_pool.start());
+    std::this_thread::sleep_for(10ms);
+    EXPECT_LT(thread_pool.get_task_count(), task_count);
+}
